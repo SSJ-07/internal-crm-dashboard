@@ -19,7 +19,8 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, onSnapshot } from "firebase/firestore"
+import { collection, addDoc, onSnapshot, doc, updateDoc } from "firebase/firestore"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Task {
   id: string
@@ -65,6 +66,14 @@ export default function TasksPage() {
     setOpen(false)
   }
 
+  const handleStatusChange = async (taskId: string, nextStatus: string) => {
+    try {
+      await updateDoc(doc(db, "tasks", taskId), { status: nextStatus })
+    } catch (error) {
+      console.error("Failed updating status", error)
+    }
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -102,7 +111,18 @@ export default function TasksPage() {
               <TableRow key={task.id}>
                 <TableCell>{task.title}</TableCell>
                 <TableCell>{task.due}</TableCell>
-                <TableCell>{task.status}</TableCell>
+                <TableCell>
+                  <Select value={task.status} onValueChange={(v) => handleStatusChange(task.id, v)}>
+                    <SelectTrigger size="sm">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="In Progress">In Progress</SelectItem>
+                      <SelectItem value="Done">Done</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

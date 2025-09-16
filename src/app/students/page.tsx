@@ -11,6 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
+import { Input as TextInput } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -20,7 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, onSnapshot } from "firebase/firestore"
+import { collection, addDoc, onSnapshot, serverTimestamp } from "firebase/firestore"
 
 interface Student {
   id: string
@@ -28,7 +30,7 @@ interface Student {
   email: string
   country: string
   status: string
-  lastActive: string
+  lastActive: any
 }
 
 export default function StudentsPage() {
@@ -37,16 +39,31 @@ export default function StudentsPage() {
   const [open, setOpen] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
 
-  // ✅ Real-time listener
+  // UI state: filters
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("__all")
+  const [countryFilter, setCountryFilter] = useState<string>("")
+  const [notContacted7d, setNotContacted7d] = useState(false)
+  const [highIntent, setHighIntent] = useState(false)
+  const [needsEssayHelp, setNeedsEssayHelp] = useState(false)
+
+  // ✅ Real-time listener (no sort to include legacy docs without createdAt)
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "students"), (snapshot) => {
-      const studentsData: Student[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Student[]
-      setStudents(studentsData)
-      setLoading(false)
-    })
+    const unsubscribe = onSnapshot(
+      collection(db, "students"),
+      (snapshot) => {
+        const studentsData: Student[] = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Student[]
+        setStudents(studentsData)
+        setLoading(false)
+      },
+      (error) => {
+        console.error("Students listener error:", error)
+        setLoading(false)
+      }
+    )
 
     return () => unsubscribe()
   }, [])
@@ -60,8 +77,12 @@ export default function StudentsPage() {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       country: formData.get("country") as string,
-      status: formData.get("status") as string, // ✅ dynamic status
-      lastActive: new Date().toISOString().split("T")[0],
+      status: formData.get("status") as string, // constrained options below
+      lastActive: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      lastContactedAt: serverTimestamp(),
+      highIntent: false,
+      needsEssayHelp: false,
     }
 
     await addDoc(collection(db, "students"), newStudent)
@@ -72,7 +93,7 @@ export default function StudentsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Students</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -91,17 +112,12 @@ export default function StudentsPage() {
               <Input name="email" placeholder="Email" required />
               <Input name="country" placeholder="Country" required />
 
-              {/* ✅ Status dropdown */}
-              <select
-                name="status"
-                className="border rounded p-2"
-                defaultValue="Exploring"
-                required
-              >
+              {/* Status dropdown aligned to spec */}
+              <select name="status" className="border rounded p-2" defaultValue="Exploring" required>
                 <option value="Exploring">Exploring</option>
-                <option value="Applying">Applying</option>
                 <option value="Shortlisting">Shortlisting</option>
-                <option value="Admitted">Admitted</option>
+                <option value="Applying">Applying</option>
+                <option value="Submitted">Submitted</option>
               </select>
 
               <Button type="submit">Save</Button>
@@ -109,6 +125,54 @@ export default function StudentsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <TextInput
+          placeholder="Search name or email"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-64"
+        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger size="sm"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all">All Statuses</SelectItem>
+            <SelectItem value="Exploring">Exploring</SelectItem>
+            <SelectItem value="Shortlisting">Shortlisting</SelectItem>
+            <SelectItem value="Applying">Applying</SelectItem>
+            <SelectItem value="Submitted">Submitted</SelectItem>
+          </SelectContent>
+        </Select>
+        <TextInput
+          placeholder="Country"
+          value={countryFilter}
+          onChange={(e) => setCountryFilter(e.target.value)}
+          className="w-40"
+        />
+
+        {/* Quick filters */}
+        <Button variant={notContacted7d ? "default" : "outline"} onClick={() => setNotContacted7d(!notContacted7d)}>
+          Not contacted in 7 days
+        </Button>
+        <Button variant={highIntent ? "default" : "outline"} onClick={() => setHighIntent(!highIntent)}>
+          High intent
+        </Button>
+        <Button variant={needsEssayHelp ? "default" : "outline"} onClick={() => setNeedsEssayHelp(!needsEssayHelp)}>
+          Needs essay help
+        </Button>
+      </div>
+
+      {/* Summary stats */}
+      {!loading && (
+        <div className="flex flex-wrap gap-2 mb-4 text-sm">
+          <span className="px-3 py-1 rounded-full bg-white border">Total: {students.length}</span>
+          <span className="px-3 py-1 rounded-full bg-white border">Exploring: {students.filter(s => s.status === "Exploring").length}</span>
+          <span className="px-3 py-1 rounded-full bg-white border">Shortlisting: {students.filter(s => s.status === "Shortlisting").length}</span>
+          <span className="px-3 py-1 rounded-full bg-white border">Applying: {students.filter(s => s.status === "Applying").length}</span>
+          <span className="px-3 py-1 rounded-full bg-white border">Submitted: {students.filter(s => s.status === "Submitted").length}</span>
+        </div>
+      )}
 
       {loading ? (
         <p>Loading students...</p>
@@ -124,7 +188,25 @@ export default function StudentsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {students.map((s) => (
+            {students
+              .filter((s) => {
+                const text = `${s.name} ${s.email}`.toLowerCase()
+                const matchesSearch = text.includes(search.toLowerCase())
+                const matchesStatus = statusFilter === "__all" ? true : s.status === statusFilter
+                const matchesCountry = countryFilter
+                  ? (s.country || "").toLowerCase().includes(countryFilter.toLowerCase())
+                  : true
+                let matchesQuick = true
+                if (notContacted7d) {
+                  const last = (s as any).lastContactedAt?.toDate?.() || (s as any).lastContactedAt
+                  const lastMs = last instanceof Date ? last.getTime() : 0
+                  matchesQuick = matchesQuick && (Date.now() - lastMs > 7 * 24 * 60 * 60 * 1000)
+                }
+                if (highIntent) matchesQuick = matchesQuick && Boolean((s as any).highIntent)
+                if (needsEssayHelp) matchesQuick = matchesQuick && Boolean((s as any).needsEssayHelp)
+                return matchesSearch && matchesStatus && matchesCountry && matchesQuick
+              })
+              .map((s) => (
               <TableRow key={s.id}>
                 <TableCell>
                   <a
@@ -137,7 +219,14 @@ export default function StudentsPage() {
                 <TableCell>{s.email}</TableCell>
                 <TableCell>{s.country}</TableCell>
                 <TableCell>{s.status}</TableCell>
-                <TableCell>{s.lastActive}</TableCell>
+                <TableCell>{
+                  // Firestore Timestamp -> readable date
+                  s?.lastActive?.toDate
+                    ? s.lastActive.toDate().toISOString().split("T")[0]
+                    : typeof s.lastActive === "string"
+                      ? s.lastActive
+                      : "—"
+                }</TableCell>
               </TableRow>
             ))}
           </TableBody>
