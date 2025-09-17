@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { useParams } from "next/navigation"
 import { db, auth } from "@/lib/firebase"
 import { doc, onSnapshot, serverTimestamp, updateDoc, collection, addDoc, query, orderBy, deleteDoc } from "firebase/firestore"
@@ -23,6 +23,9 @@ interface Student {
   status: string
   lastActive: any
   notes?: string
+  lastContactedAt?: any
+  highIntent?: boolean
+  needsEssayHelp?: boolean
 }
 
 interface InteractionItem {
@@ -61,6 +64,9 @@ export default function StudentProfilePage() {
   const [permError, setPermError] = useState<string | null>(null)
   const [notes, setNotes] = useState<NoteItem[]>([])
   const [noteText, setNoteText] = useState("")
+  const taskFormRef = useRef<HTMLFormElement>(null)
+  const [aiSummary, setAiSummary] = useState<string>("")
+  const [generatingSummary, setGeneratingSummary] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -142,7 +148,7 @@ export default function StudentProfilePage() {
 
   const addCommunication = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!id) return
+      if (!id) return
     const subjectTrimmed = (commSubject || "").trim()
     const bodyTrimmed = (commBody || "").trim()
     const hasContent = subjectTrimmed.length > 0 || bodyTrimmed.length > 0
@@ -246,17 +252,52 @@ export default function StudentProfilePage() {
     e.preventDefault()
     if (!id) return
     const formData = new FormData(e.currentTarget)
-    const title = (formData.get("title") as string) || "Follow up"
-    const due = formData.get("due") as string
+    const title = (formData.get("reminderTitle") as string) || "Follow up"
+    const due = formData.get("reminderDue") as string
+    
+    // Ensure date is in YYYY-MM-DD format for proper comparison
+    const formattedDue = new Date(due).toISOString().split('T')[0]
+    
+    const reminder = {
+      title,
+      due: formattedDue,
+      studentId: id,
+      studentName: student?.name || "Unknown Student",
+      createdAt: serverTimestamp(),
+      type: "reminder",
+      createdBy: auth.currentUser?.email || "Unknown",
+    }
+    
+    try {
+      // Store in a separate reminders collection for personal use
+      await addDoc(collection(db, "reminders"), reminder)
+      alert("Personal reminder scheduled successfully!")
+      e.currentTarget.reset()
+    } catch (error) {
+      console.error("Error scheduling reminder:", error)
+      alert("Error scheduling reminder. Please try again.")
+    }
+  }
+
+  const scheduleTask = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!id) return
+    const formData = new FormData(e.currentTarget)
+    const title = (formData.get("taskTitle") as string) || "Follow up"
+    const due = formData.get("taskDue") as string
     await addDoc(collection(db, "tasks"), {
       title,
       due,
       status: "Pending",
       studentId: id,
+      studentName: student?.name || "Unknown Student",
       createdAt: serverTimestamp(),
+      createdBy: auth.currentUser?.email || "Unknown",
     })
-    alert("Reminder scheduled and added to Tasks.")
-    e.currentTarget.reset()
+    alert("Task scheduled and added to shared Tasks.")
+    if (taskFormRef.current) {
+      taskFormRef.current.reset()
+    }
   }
 
   // Notes realtime
@@ -291,6 +332,76 @@ export default function StudentProfilePage() {
     await deleteDoc(doc(db, "students", id as string, "notes", noteId))
   }
 
+  const generateAISummary = async () => {
+    if (!student) return
+    
+    setGeneratingSummary(true)
+    
+    try {
+      // Collect all relevant data for the AI
+      const lastContacted = student.lastContactedAt?.toDate?.() || student.lastContactedAt
+      const lastContactedDate = lastContacted instanceof Date ? lastContacted.toLocaleDateString() : "Never"
+      
+      const studentData = {
+        profile: {
+          name: student.name,
+          email: student.email,
+          phone: student.phone,
+          grade: student.grade,
+          country: student.country,
+          status: student.status,
+          lastActive: student.lastActive?.toDate?.()?.toLocaleDateString() || "Unknown",
+          lastContacted: lastContactedDate,
+          highIntent: student.highIntent || false,
+          needsEssayHelp: student.needsEssayHelp || false
+        },
+        communications: communications.map(c => ({
+          channel: c.channel,
+          subject: c.subject,
+          body: c.body,
+          date: c.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
+        })),
+        interactions: interactions.map(i => ({
+          type: i.type.replaceAll("_", " "),
+          detail: i.detail,
+          date: i.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
+        })),
+        notes: notes.map(n => ({
+          text: n.text,
+          date: n.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
+        })),
+        stats: {
+          totalCommunications: communications.length,
+          totalInteractions: interactions.length,
+          totalNotes: notes.length,
+          daysSinceLastContact: lastContacted instanceof Date ? 
+            Math.floor((Date.now() - lastContacted.getTime()) / (1000 * 60 * 60 * 24)) : null
+        }
+      }
+      
+      // Call the AI API
+      const response = await fetch('/api/ai-summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ studentData })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate AI summary')
+      }
+      
+      const data = await response.json()
+      setAiSummary(data.summary)
+    } catch (error) {
+      console.error("Error generating AI summary:", error)
+      setAiSummary("Error generating summary. Please check your API key and try again.")
+    } finally {
+      setGeneratingSummary(false)
+    }
+  }
+
   if (loading) return <p>Loading...</p>
   if (!student) return <p>No student found.</p>
 
@@ -302,11 +413,11 @@ export default function StudentProfilePage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <p><strong>Email:</strong> {student.email}</p>
+          <p><strong>Email:</strong> {student.email}</p>
             <p><strong>Phone:</strong> {student.phone || "—"}</p>
             <p><strong>Grade:</strong> {student.grade || "—"}</p>
-            <p><strong>Country:</strong> {student.country}</p>
-            <p><strong>Status:</strong> {student.status}</p>
+          <p><strong>Country:</strong> {student.country}</p>
+          <p><strong>Status:</strong> {student.status}</p>
             <p><strong>Last Active:</strong> {student?.lastActive?.toDate ? student.lastActive.toDate().toISOString().split("T")[0] : (typeof student.lastActive === "string" ? student.lastActive : "—")}</p>
           </div>
 
@@ -321,6 +432,78 @@ export default function StudentProfilePage() {
               <div className="h-2 bg-blue-600 rounded" style={{ width: `${stageProgress.percent}%` }} />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Student Classification</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="highIntent"
+                checked={student.highIntent || false}
+                onChange={async (e) => {
+                  await updateDoc(doc(db, "students", id as string), {
+                    highIntent: e.target.checked
+                  })
+                }}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="highIntent" className="text-sm font-medium text-gray-700">
+                High Intent Student
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="needsEssayHelp"
+                checked={student.needsEssayHelp || false}
+                onChange={async (e) => {
+                  await updateDoc(doc(db, "students", id as string), {
+                    needsEssayHelp: e.target.checked
+                  })
+                }}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="needsEssayHelp" className="text-sm font-medium text-gray-700">
+                Needs Essay Help
+              </label>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>AI Summary</span>
+            <Button 
+              onClick={generateAISummary} 
+              disabled={generatingSummary}
+              variant="outline"
+              size="sm"
+            >
+              {generatingSummary ? "Generating..." : aiSummary ? "Regenerate" : "Generate Summary"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {aiSummary ? (
+            <div className="prose prose-sm max-w-none">
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                {aiSummary}
+              </pre>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <div className="text-4xl mb-2">🤖</div>
+              <p>Click "Generate Summary" to create an AI-powered analysis of this student's profile</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -397,15 +580,26 @@ export default function StudentProfilePage() {
           {communications.length === 0 ? (
             <p className="text-sm text-gray-500">No communications yet.</p>
           ) : (
-            <ul className="space-y-2">
-              {communications.map((c) => (
-                <li key={c.id} className="border rounded p-2 bg-white">
-                  <div className="text-sm"><strong className="uppercase">{c.channel}</strong>{c.subject ? ` · ${c.subject}` : ""}</div>
-                  {c.body ? <div className="text-sm whitespace-pre-wrap">{c.body}</div> : null}
-                  <div className="text-xs text-gray-500">{c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString() : "—"}</div>
-                </li>
-              ))}
-            </ul>
+            <div className="max-h-80 overflow-y-auto border rounded-lg">
+              <ul className="space-y-2 p-2">
+                {communications.map((c) => (
+                  <li key={c.id} className="border rounded p-3 bg-white hover:bg-gray-50 transition-colors">
+                    <div className="text-sm font-medium">
+                      <span className="uppercase">{c.channel}</span>
+                      {c.subject ? <span className="text-gray-600"> · {c.subject}</span> : ""}
+                    </div>
+                    {c.body ? (
+                      <div className="text-sm text-gray-700 mt-2 whitespace-pre-wrap max-h-20 overflow-y-auto">
+                        {c.body}
+                      </div>
+                    ) : null}
+                    <div className="text-xs text-gray-500 mt-2">
+                      {c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString() : "—"}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -415,15 +609,32 @@ export default function StudentProfilePage() {
           <CardTitle>Communication Tools</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
             <div>
               <Button onClick={sendMockFollowUpEmail}>Send Follow-up Email</Button>
             </div>
-            <form onSubmit={scheduleReminder} className="flex flex-col md:flex-row gap-2">
-              <Input name="title" placeholder="Reminder title" />
-              <Input name="due" type="date" required />
-              <Button type="submit">Schedule Reminder</Button>
-            </form>
+            
+            {/* Personal Reminder */}
+            <div className="border rounded p-4 bg-gray-50">
+              <h4 className="font-medium mb-2">Schedule Personal Reminder</h4>
+              <p className="text-sm text-gray-600 mb-3">This reminder is only visible to you</p>
+              <form onSubmit={scheduleReminder} className="flex flex-col md:flex-row gap-2">
+                <Input name="reminderTitle" placeholder="Reminder title" />
+                <Input name="reminderDue" type="date" required />
+                <Button type="submit">Schedule Reminder</Button>
+              </form>
+            </div>
+
+            {/* Shared Task */}
+            <div className="border rounded p-4 bg-blue-50">
+              <h4 className="font-medium mb-2">Schedule Shared Task</h4>
+              <p className="text-sm text-gray-600 mb-3">This task will be visible to all team members in the Tasks tab</p>
+              <form ref={taskFormRef} onSubmit={scheduleTask} className="flex flex-col md:flex-row gap-2">
+                <Input name="taskTitle" placeholder="Task title" />
+                <Input name="taskDue" type="date" required />
+                <Button type="submit">Schedule Task</Button>
+              </form>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -450,17 +661,8 @@ export default function StudentProfilePage() {
                   <Button variant="outline" onClick={() => deleteNote(n.id)}>Delete</Button>
                 </li>
               ))}
-            </ul>
+          </ul>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Notes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>{student.notes || "No notes yet."}</p>
         </CardContent>
       </Card>
     </div>

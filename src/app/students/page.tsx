@@ -31,6 +31,9 @@ interface Student {
   country: string
   status: string
   lastActive: any
+  lastContactedAt?: any
+  highIntent?: boolean
+  needsEssayHelp?: boolean
 }
 
 export default function StudentsPage() {
@@ -67,6 +70,26 @@ export default function StudentsPage() {
 
     return () => unsubscribe()
   }, [])
+
+  // Helper functions to classify students
+  const isNotContactedIn7Days = (student: Student) => {
+    if (!student.lastContactedAt) return true // Never contacted
+    const lastContacted = student.lastContactedAt?.toDate?.() || student.lastContactedAt
+    const lastContactedMs = lastContacted instanceof Date ? lastContacted.getTime() : 0
+    return Date.now() - lastContactedMs > 7 * 24 * 60 * 60 * 1000
+  }
+
+  const isHighIntent = (student: Student) => {
+    return Boolean(student.highIntent)
+  }
+
+  const isNeedsEssayHelp = (student: Student) => {
+    return Boolean(student.needsEssayHelp)
+  }
+
+  const isInEssayStage = (student: Student) => {
+    return student.status === "Applying" || student.status === "Submitted"
+  }
 
   const handleAddStudent = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -198,12 +221,14 @@ export default function StudentsPage() {
                   : true
                 let matchesQuick = true
                 if (notContacted7d) {
-                  const last = (s as any).lastContactedAt?.toDate?.() || (s as any).lastContactedAt
-                  const lastMs = last instanceof Date ? last.getTime() : 0
-                  matchesQuick = matchesQuick && (Date.now() - lastMs > 7 * 24 * 60 * 60 * 1000)
+                  matchesQuick = matchesQuick && isNotContactedIn7Days(s)
                 }
-                if (highIntent) matchesQuick = matchesQuick && Boolean((s as any).highIntent)
-                if (needsEssayHelp) matchesQuick = matchesQuick && Boolean((s as any).needsEssayHelp)
+                if (highIntent) {
+                  matchesQuick = matchesQuick && isHighIntent(s)
+                }
+                if (needsEssayHelp) {
+                  matchesQuick = matchesQuick && isNeedsEssayHelp(s)
+                }
                 return matchesSearch && matchesStatus && matchesCountry && matchesQuick
               })
               .map((s) => (
