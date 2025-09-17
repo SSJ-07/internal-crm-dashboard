@@ -1,0 +1,52 @@
+[
+  {
+    "name": "Layla Haddad",
+    "email": "layla.haddad@example.com",
+    "phone": "+21620123456",
+    "grade": "10th",
+    "country": "Tunisia",
+    "status": "Exploring",
+    "highIntent": true,
+    "needsEssayHelp": false
+  },
+  {
+    "name": "Owen Murphy",
+    "email": "owen.murphy@example.com",
+    "phone": "+353871234567",
+    "grade": "12th",
+    "country": "Ireland",
+    "status": "Applying",
+    "highIntent": true,
+    "needsEssayHelp": true
+  },
+  {
+    "name": "Siti Nurhaliza",
+    "email": "siti.nurhaliza@example.com",
+    "phone": "+60123456789",
+    "grade": "11th",
+    "country": "Malaysia",
+    "status": "Shortlisting",
+    "highIntent": false,
+    "needsEssayHelp": true
+  },
+  {
+    "name": "Carlos Mendes",
+    "email": "carlos.mendes@example.com",
+    "phone": "+244921234567",
+    "grade": "9th",
+    "country": "Angola",
+    "status": "Accepted",
+    "highIntent": true,
+    "needsEssayHelp": false
+  },
+  {
+    "name": "Hannah Bergström",
+    "email": "hannah.bergstrom@example.com",
+    "phone": "+4681234567",
+    "grade": "12th",
+    "country": "Sweden",
+    "status": "Applying",
+    "highIntent": true,
+    "needsEssayHelp": true
+  }
+]

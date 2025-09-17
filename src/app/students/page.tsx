@@ -41,6 +41,12 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
+  
+  // Bulk import state
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [isImporting, setIsImporting] = useState(false)
+  const [importResult, setImportResult] = useState<any>(null)
+  const [showBulkImport, setShowBulkImport] = useState(false)
 
   // UI state: filters
   const [search, setSearch] = useState("")
@@ -114,39 +120,368 @@ export default function StudentsPage() {
     setOpen(false)
   }
 
+  // Bulk import functionality
+  const handleBulkImport = async () => {
+    if (!importFile) return
+    
+    setIsImporting(true)
+    setImportResult(null)
+    
+    try {
+      const text = await importFile.text()
+      console.log('File content:', text)
+      
+      const students = JSON.parse(text)
+      console.log('Parsed students:', students)
+      
+      const response = await fetch('/api/students/bulk/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ students, validateOnly: false })
+      })
+      
+      console.log('Response status:', response.status)
+      
+        if (!response.ok) {
+          const errorData = await response.json()
+          console.error('API error:', errorData)
+          setImportResult({ 
+            success: false, 
+            error: errorData.error || `Server error: ${response.status}` 
+          })
+          return
+        }
+        
+        const result = await response.json()
+        console.log('Import result:', result)
+        
+        // Show results even if success is false, as long as we have a proper result object
+        if (result.summary || result.errors || result.imported !== undefined) {
+          setImportResult(result)
+        } else {
+          setImportResult({ 
+            success: false, 
+            error: result.error || "Unknown error occurred" 
+          })
+        }
+      
+      // Don't clear file input automatically - let user see results
+      // They can manually clear or try again
+    } catch (error) {
+      console.error('Import error:', error)
+      setImportResult({ 
+        success: false, 
+        error: `Failed to import students: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      })
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  // Export functionality
+  const handleExport = async (format: 'csv' | 'json') => {
+    try {
+      const response = await fetch('/api/students/bulk/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format })
+      })
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `students_export.${format}`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('Export error:', error)
+    }
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Students</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>Add Student</Button>
-          </DialogTrigger>
-          <DialogContent>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => handleExport('csv')}>
+            Export CSV
+          </Button>
+          <Button variant="outline" onClick={() => handleExport('json')}>
+            Export JSON
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button>Add Student</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Add New Student</DialogTitle>
+              <DialogTitle>Add Students</DialogTitle>
             </DialogHeader>
-            <form
-              ref={formRef}
-              className="flex flex-col gap-4 mt-4"
-              onSubmit={handleAddStudent}
-            >
-              <Input name="name" placeholder="Name" required />
-              <Input name="email" placeholder="Email" required />
-              <Input name="country" placeholder="Country" required />
+            
+            {/* Toggle between single and bulk import */}
+            <div className="flex gap-2 mb-4">
+              <Button
+                variant={!showBulkImport ? "default" : "outline"}
+                onClick={() => setShowBulkImport(false)}
+                size="sm"
+              >
+                Add Single Student
+              </Button>
+              <Button
+                variant={showBulkImport ? "default" : "outline"}
+                onClick={() => setShowBulkImport(true)}
+                size="sm"
+              >
+                Bulk Import
+              </Button>
+            </div>
 
-              {/* Status dropdown aligned to spec */}
-              <select name="status" className="border rounded p-2" defaultValue="Exploring" required>
-                <option value="Exploring">Exploring</option>
-                <option value="Shortlisting">Shortlisting</option>
-                <option value="Applying">Applying</option>
-                <option value="Submitted">Submitted</option>
-              </select>
+            {!showBulkImport ? (
+              // Single student form
+              <form
+                ref={formRef}
+                className="flex flex-col gap-4 mt-4"
+                onSubmit={handleAddStudent}
+              >
+                <Input name="name" placeholder="Name" required />
+                <Input name="email" placeholder="Email" required />
+                <Input name="country" placeholder="Country" required />
 
-              <Button type="submit">Save</Button>
-            </form>
+                {/* Status dropdown aligned to spec */}
+                <select name="status" className="border rounded p-2" defaultValue="Exploring" required>
+                  <option value="Exploring">Exploring</option>
+                  <option value="Shortlisting">Shortlisting</option>
+                  <option value="Applying">Applying</option>
+                  <option value="Submitted">Submitted</option>
+                </select>
+
+                <Button type="submit">Save Student</Button>
+              </form>
+            ) : (
+              // Bulk import form
+              <div className="space-y-4 mt-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Upload JSON File
+                  </label>
+                  <Input
+                    type="file"
+                    accept=".json"
+                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                    className="mb-2"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Upload a JSON file with student data. Download sample format below.
+                  </p>
+                </div>
+
+                {/* Sample format download */}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const sampleData = [
+                        {
+                          name: "John Doe",
+                          email: "john@example.com",
+                          phone: "+1234567890",
+                          grade: "12th",
+                          country: "United States",
+                          status: "Exploring",
+                          highIntent: false,
+                          needsEssayHelp: false
+                        },
+                        {
+                          name: "Jane Smith",
+                          email: "jane@example.com",
+                          phone: "+1234567891",
+                          grade: "11th",
+                          country: "Canada",
+                          status: "Shortlisting",
+                          highIntent: true,
+                          needsEssayHelp: true
+                        }
+                      ]
+                      
+                      const blob = new Blob([JSON.stringify(sampleData, null, 2)], { type: 'application/json' })
+                      const url = window.URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = 'sample-students.json'
+                      document.body.appendChild(a)
+                      a.click()
+                      window.URL.revokeObjectURL(url)
+                      document.body.removeChild(a)
+                    }}
+                  >
+                    Download Sample Format
+                  </Button>
+                </div>
+
+                {/* Import and Clear buttons */}
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleBulkImport} 
+                    disabled={!importFile || isImporting}
+                    className="flex-1"
+                  >
+                    {isImporting ? "Importing..." : "Import Students"}
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setImportFile(null)
+                      setImportResult(null)
+                    }}
+                    disabled={isImporting}
+                  >
+                    Clear
+                  </Button>
+                </div>
+
+                {/* Import results */}
+                {importResult && (
+                  <div className={`p-4 rounded ${
+                    importResult.success ? 'bg-green-50 border border-green-200' : 
+                    (importResult.summary || importResult.errors) ? 'bg-yellow-50 border border-yellow-200' : 'bg-red-50 border border-red-200'
+                  }`}>
+                    {importResult.success ? (
+                      <div>
+                        <div className="font-medium text-green-800 mb-3">
+                          ✅ Import Completed!
+                        </div>
+                        
+                        {/* Summary Stats */}
+                        {importResult.summary && (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                            <div className="text-center p-2 bg-white rounded border">
+                              <div className="text-lg font-bold text-green-600">{importResult.summary.imported}</div>
+                              <div className="text-xs text-gray-600">Imported</div>
+                            </div>
+                            <div className="text-center p-2 bg-white rounded border">
+                              <div className="text-lg font-bold text-orange-600">{importResult.summary.skipped}</div>
+                              <div className="text-xs text-gray-600">Skipped (Duplicates)</div>
+                            </div>
+                            <div className="text-center p-2 bg-white rounded border">
+                              <div className="text-lg font-bold text-red-600">{importResult.summary.validationErrors}</div>
+                              <div className="text-xs text-gray-600">Validation Errors</div>
+                            </div>
+                            <div className="text-center p-2 bg-white rounded border">
+                              <div className="text-lg font-bold text-gray-600">{importResult.summary.total}</div>
+                              <div className="text-xs text-gray-600">Total</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Detailed Results */}
+                        <div className="text-sm text-gray-700 space-y-1">
+                          <div>✅ Successfully imported: <strong>{importResult.imported}</strong> students</div>
+                          {importResult.summary?.skipped > 0 && (
+                            <div>⚠️ Skipped: <strong>{importResult.summary.skipped}</strong> students (duplicate emails)</div>
+                          )}
+                          {importResult.summary?.validationErrors > 0 && (
+                            <div>❌ Validation errors: <strong>{importResult.summary.validationErrors}</strong> students</div>
+                          )}
+                        </div>
+
+                        {/* Show first few errors if any */}
+                        {importResult.errors?.length > 0 && (
+                          <div className="mt-3">
+                            <div className="font-medium text-gray-700 mb-2">Issues Found:</div>
+                            <div className="max-h-40 overflow-y-auto space-y-2">
+                              {importResult.errors.slice(0, 5).map((error: any, index: number) => (
+                                <div key={index} className="text-sm bg-red-50 border border-red-200 p-3 rounded">
+                                  <div className="font-medium text-red-800">
+                                    Student {error.row} ({error.email}): {error.error}
+                                  </div>
+                                </div>
+                              ))}
+                              {importResult.errors.length > 5 && (
+                                <div className="text-gray-500 italic text-sm p-2 bg-gray-50 rounded">
+                                  ... and {importResult.errors.length - 5} more issues
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (importResult.summary || importResult.errors) ? (
+                      <div>
+                        <div className="font-medium text-yellow-800 mb-3">
+                          ⚠️ Import Processed with Issues
+                        </div>
+                        
+                        {/* Summary Stats */}
+                        {importResult.summary && (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                            <div className="text-center p-2 bg-white rounded border">
+                              <div className="text-lg font-bold text-green-600">{importResult.summary.imported}</div>
+                              <div className="text-xs text-gray-600">Imported</div>
+                            </div>
+                            <div className="text-center p-2 bg-white rounded border">
+                              <div className="text-lg font-bold text-orange-600">{importResult.summary.skipped}</div>
+                              <div className="text-xs text-gray-600">Skipped (Duplicates)</div>
+                            </div>
+                            <div className="text-center p-2 bg-white rounded border">
+                              <div className="text-lg font-bold text-red-600">{importResult.summary.validationErrors}</div>
+                              <div className="text-xs text-gray-600">Validation Errors</div>
+                            </div>
+                            <div className="text-center p-2 bg-white rounded border">
+                              <div className="text-lg font-bold text-gray-600">{importResult.summary.total}</div>
+                              <div className="text-xs text-gray-600">Total</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Detailed Results */}
+                        <div className="text-sm text-gray-700 space-y-1">
+                          <div>✅ Successfully imported: <strong>{importResult.imported}</strong> students</div>
+                          {importResult.summary?.skipped > 0 && (
+                            <div>⚠️ Skipped: <strong>{importResult.summary.skipped}</strong> students (duplicate emails)</div>
+                          )}
+                          {importResult.summary?.validationErrors > 0 && (
+                            <div>❌ Validation errors: <strong>{importResult.summary.validationErrors}</strong> students</div>
+                          )}
+                        </div>
+
+                        {/* Show first few errors if any */}
+                        {importResult.errors?.length > 0 && (
+                          <div className="mt-3">
+                            <div className="font-medium text-gray-700 mb-2">Issues Found:</div>
+                            <div className="max-h-40 overflow-y-auto space-y-2">
+                              {importResult.errors.slice(0, 5).map((error: any, index: number) => (
+                                <div key={index} className="text-sm bg-red-50 border border-red-200 p-3 rounded">
+                                  <div className="font-medium text-red-800">
+                                    Student {error.row} ({error.email}): {error.error}
+                                  </div>
+                                </div>
+                              ))}
+                              {importResult.errors.length > 5 && (
+                                <div className="text-gray-500 italic text-sm p-2 bg-gray-50 rounded">
+                                  ... and {importResult.errors.length - 5} more issues
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-red-800">
+                        <div className="font-medium">❌ Import Failed</div>
+                        <div className="text-sm">{importResult.error}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Filters */}
@@ -200,62 +535,66 @@ export default function StudentsPage() {
       {loading ? (
         <p>Loading students...</p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Country</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Last Active</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {students
-              .filter((s) => {
-                const text = `${s.name} ${s.email}`.toLowerCase()
-                const matchesSearch = text.includes(search.toLowerCase())
-                const matchesStatus = statusFilter === "__all" ? true : s.status === statusFilter
-                const matchesCountry = countryFilter
-                  ? (s.country || "").toLowerCase().includes(countryFilter.toLowerCase())
-                  : true
-                let matchesQuick = true
-                if (notContacted7d) {
-                  matchesQuick = matchesQuick && isNotContactedIn7Days(s)
-                }
-                if (highIntent) {
-                  matchesQuick = matchesQuick && isHighIntent(s)
-                }
-                if (needsEssayHelp) {
-                  matchesQuick = matchesQuick && isNeedsEssayHelp(s)
-                }
-                return matchesSearch && matchesStatus && matchesCountry && matchesQuick
-              })
-              .map((s) => (
-              <TableRow key={s.id}>
-                <TableCell>
-                  <a
-                    href={`/students/${s.id}`}
-                    className="text-blue-600 hover:underline"
-                  >
-                    {s.name}
-                  </a>
-                </TableCell>
-                <TableCell>{s.email}</TableCell>
-                <TableCell>{s.country}</TableCell>
-                <TableCell>{s.status}</TableCell>
-                <TableCell>{
-                  // Firestore Timestamp -> readable date
-                  s?.lastActive?.toDate
-                    ? s.lastActive.toDate().toISOString().split("T")[0]
-                    : typeof s.lastActive === "string"
-                      ? s.lastActive
-                      : "—"
-                }</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <div className="border rounded-lg overflow-hidden">
+          <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
+            <Table>
+              <TableHeader className="sticky top-0 bg-white z-10">
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Country</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last Active</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {students
+                  .filter((s) => {
+                    const text = `${s.name} ${s.email}`.toLowerCase()
+                    const matchesSearch = text.includes(search.toLowerCase())
+                    const matchesStatus = statusFilter === "__all" ? true : s.status === statusFilter
+                    const matchesCountry = countryFilter
+                      ? (s.country || "").toLowerCase().includes(countryFilter.toLowerCase())
+                      : true
+                    let matchesQuick = true
+                    if (notContacted7d) {
+                      matchesQuick = matchesQuick && isNotContactedIn7Days(s)
+                    }
+                    if (highIntent) {
+                      matchesQuick = matchesQuick && isHighIntent(s)
+                    }
+                    if (needsEssayHelp) {
+                      matchesQuick = matchesQuick && isNeedsEssayHelp(s)
+                    }
+                    return matchesSearch && matchesStatus && matchesCountry && matchesQuick
+                  })
+                  .map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <a
+                        href={`/students/${s.id}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {s.name}
+                      </a>
+                    </TableCell>
+                    <TableCell>{s.email}</TableCell>
+                    <TableCell>{s.country}</TableCell>
+                    <TableCell>{s.status}</TableCell>
+                    <TableCell>{
+                      // Firestore Timestamp -> readable date
+                      s?.lastActive?.toDate
+                        ? s.lastActive.toDate().toISOString().split("T")[0]
+                        : typeof s.lastActive === "string"
+                          ? s.lastActive
+                          : "—"
+                    }</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       )}
     </div>
   )
