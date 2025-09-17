@@ -338,65 +338,162 @@ export default function StudentProfilePage() {
     setGeneratingSummary(true)
     
     try {
-      // Collect all relevant data for the AI
+      // Collect all relevant data for the summary
       const lastContacted = student.lastContactedAt?.toDate?.() || student.lastContactedAt
       const lastContactedDate = lastContacted instanceof Date ? lastContacted.toLocaleDateString() : "Never"
       
-      const studentData = {
-        profile: {
-          name: student.name,
-          email: student.email,
-          phone: student.phone,
-          grade: student.grade,
-          country: student.country,
-          status: student.status,
-          lastActive: student.lastActive?.toDate?.()?.toLocaleDateString() || "Unknown",
-          lastContacted: lastContactedDate,
-          highIntent: student.highIntent || false,
-          needsEssayHelp: student.needsEssayHelp || false
-        },
-        communications: communications.map(c => ({
-          channel: c.channel,
-          subject: c.subject,
-          body: c.body,
-          date: c.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
-        })),
-        interactions: interactions.map(i => ({
-          type: i.type.replaceAll("_", " "),
-          detail: i.detail,
-          date: i.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
-        })),
-        notes: notes.map(n => ({
-          text: n.text,
-          date: n.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
-        })),
-        stats: {
-          totalCommunications: communications.length,
-          totalInteractions: interactions.length,
-          totalNotes: notes.length,
-          daysSinceLastContact: lastContacted instanceof Date ? 
-            Math.floor((Date.now() - lastContacted.getTime()) / (1000 * 60 * 60 * 24)) : null
+      const recentCommunications = communications.slice(0, 3).map(c => ({
+        channel: c.channel,
+        subject: c.subject,
+        body: c.body?.substring(0, 100) + (c.body && c.body.length > 100 ? "..." : ""),
+        date: c.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
+      }))
+      
+      const recentInteractions = interactions.slice(0, 3).map(i => ({
+        type: i.type.replaceAll("_", " "),
+        detail: i.detail,
+        date: i.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
+      }))
+      
+      const recentNotes = notes.slice(0, 3).map(n => ({
+        text: n.text.substring(0, 100) + (n.text.length > 100 ? "..." : ""),
+        date: n.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
+      }))
+      
+      // Generate AI summary based on available data
+      let summary = `**Student Profile Summary for ${student.name}**\n\n`
+      
+      // Basic info
+      summary += `**Current Status:** ${student.status}\n`
+      summary += `**Country:** ${student.country}\n`
+      summary += `**Last Contacted:** ${lastContactedDate}\n`
+      summary += `**Grade:** ${student.grade || "Not specified"}\n\n`
+      
+      // Classification flags
+      if (student.highIntent || student.needsEssayHelp) {
+        summary += `**Key Classifications:**\n`
+        if (student.highIntent) summary += `• High Intent Student - Priority candidate\n`
+        if (student.needsEssayHelp) summary += `• Needs Essay Help - Requires additional support\n`
+        summary += `\n`
+      }
+      
+      // Progress analysis
+      const stageProgress = ["Exploring", "Shortlisting", "Applying", "Submitted"]
+      const currentStageIndex = stageProgress.indexOf(student.status)
+      const progressPercent = ((currentStageIndex + 1) / stageProgress.length) * 100
+      
+      summary += `**Application Progress:** ${progressPercent.toFixed(0)}% complete\n`
+      summary += `• Currently in: ${student.status} stage\n`
+      if (currentStageIndex < stageProgress.length - 1) {
+        summary += `• Next stage: ${stageProgress[currentStageIndex + 1]}\n`
+      } else {
+        summary += `• Application completed!\n`
+      }
+      summary += `\n`
+      
+      // Communication insights
+      if (communications.length > 0) {
+        summary += `**Communication Activity:** ${communications.length} total communications\n`
+        const channelCounts = communications.reduce((acc, c) => {
+          acc[c.channel] = (acc[c.channel] || 0) + 1
+          return acc
+        }, {} as Record<string, number>)
+        
+        summary += `• Channel breakdown: ${Object.entries(channelCounts)
+          .map(([channel, count]) => `${channel.toUpperCase()}: ${count}`)
+          .join(", ")}\n`
+        
+        if (recentCommunications.length > 0) {
+          summary += `• Recent communications:\n`
+          recentCommunications.forEach(comm => {
+            summary += `  - ${comm.channel.toUpperCase()} (${comm.date}): ${comm.subject || "No subject"}\n`
+          })
+        }
+        summary += `\n`
+      } else {
+        summary += `**Communication Activity:** No communications recorded yet\n\n`
+      }
+      
+      // Interaction insights
+      if (interactions.length > 0) {
+        summary += `**Student Engagement:** ${interactions.length} recorded interactions\n`
+        const interactionTypes = interactions.reduce((acc, i) => {
+          acc[i.type] = (acc[i.type] || 0) + 1
+          return acc
+        }, {} as Record<string, number>)
+        
+        summary += `• Activity types: ${Object.entries(interactionTypes)
+          .map(([type, count]) => `${type.replaceAll("_", " ")}: ${count}`)
+          .join(", ")}\n`
+        
+        if (recentInteractions.length > 0) {
+          summary += `• Recent activity:\n`
+          recentInteractions.forEach(interaction => {
+            summary += `  - ${interaction.type} (${interaction.date}): ${interaction.detail || "No details"}\n`
+          })
+        }
+        summary += `\n`
+      } else {
+        summary += `**Student Engagement:** No interactions recorded yet\n\n`
+      }
+      
+      // Notes insights
+      if (notes.length > 0) {
+        summary += `**Internal Notes:** ${notes.length} notes on file\n`
+        if (recentNotes.length > 0) {
+          summary += `• Recent notes:\n`
+          recentNotes.forEach(note => {
+            summary += `  - ${note.date}: ${note.text}\n`
+          })
+        }
+        summary += `\n`
+      } else {
+        summary += `**Internal Notes:** No notes recorded yet\n\n`
+      }
+      
+      // Recommendations
+      summary += `**AI Recommendations:**\n`
+      
+      if (student.highIntent) {
+        summary += `• Priority follow-up recommended - this is a high-intent student\n`
+      }
+      
+      if (student.needsEssayHelp) {
+        summary += `• Consider offering essay writing support or resources\n`
+      }
+      
+      if (lastContactedDate === "Never") {
+        summary += `• Immediate outreach needed - student has never been contacted\n`
+      } else {
+        const daysSinceContact = lastContacted instanceof Date ? 
+          Math.floor((Date.now() - lastContacted.getTime()) / (1000 * 60 * 60 * 24)) : 0
+        if (daysSinceContact > 7) {
+          summary += `• Follow-up overdue - last contact was ${daysSinceContact} days ago\n`
+        } else if (daysSinceContact > 3) {
+          summary += `• Consider follow-up soon - last contact was ${daysSinceContact} days ago\n`
+        } else {
+          summary += `• Recent contact - good engagement level\n`
         }
       }
       
-      // Call the AI API
-      const response = await fetch('/api/ai-summary', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ studentData })
-      })
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate AI summary')
+      if (student.status === "Exploring") {
+        summary += `• Focus on understanding student's goals and interests\n`
+      } else if (student.status === "Shortlisting") {
+        summary += `• Help with university selection and application strategy\n`
+      } else if (student.status === "Applying") {
+        summary += `• Provide application support and deadline management\n`
+      } else if (student.status === "Submitted") {
+        summary += `• Monitor application status and prepare for next steps\n`
       }
       
-      const data = await response.json()
-      setAiSummary(data.summary)
+      if (communications.length === 0) {
+        summary += `• Initiate first contact to establish relationship\n`
+      }
+      
+      setAiSummary(summary)
     } catch (error) {
       console.error("Error generating AI summary:", error)
-      setAiSummary("Error generating summary. Please check your API key and try again.")
+      setAiSummary("Error generating summary. Please try again.")
     } finally {
       setGeneratingSummary(false)
     }
