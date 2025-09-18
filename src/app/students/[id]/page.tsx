@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from "react"
 import { useParams } from "next/navigation"
-import { db, auth } from "@/lib/firebase"
-import { doc, onSnapshot, serverTimestamp, updateDoc, collection, addDoc, query, orderBy, deleteDoc } from "firebase/firestore"
+import { auth } from "@/lib/firebase"
 import { apiClient } from "@/lib/api-client"
 import {
   Card,
@@ -46,7 +45,9 @@ interface CommunicationItem {
 
 interface NoteItem {
   id: string
-  text: string
+  text?: string
+  content?: string
+  title?: string
   createdAt: any
 }
 
@@ -71,23 +72,27 @@ export default function StudentProfilePage() {
 
   useEffect(() => {
     if (!id) return
-    const ref = doc(db, "students", id as string)
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (snap.exists()) {
-          setStudent({ id: snap.id, ...snap.data() } as Student)
-          setLoading(false)
+    
+    const fetchStudent = async () => {
+      try {
+        setLoading(true)
+        const response = await apiClient.getStudent(id as string)
+        if (response.success && response.data) {
+          setStudent(response.data)
+          // Mark last active on view
+          await apiClient.updateStudentLastActive(id as string)
         } else {
           setStudent(null)
-          setLoading(false)
         }
-      },
-      () => setLoading(false)
-    )
-    // Mark last active on view
-    updateDoc(ref, { lastActive: serverTimestamp() }).catch(() => {})
-    return () => unsub()
+      } catch (error) {
+        console.error("Error fetching student:", error)
+        setStudent(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchStudent()
   }, [id])
 
   const stageProgress = useMemo(() => {
@@ -100,51 +105,66 @@ export default function StudentProfilePage() {
   // Interactions realtime
   useEffect(() => {
     if (!id) return
-    const interactionsRef = collection(db, "students", id as string, "interactions")
-    const q = query(interactionsRef, orderBy("createdAt", "desc"))
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const items: InteractionItem[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
-        setInteractions(items)
-      },
-      (err) => {
-        console.error("Interactions listener error", err)
-        setPermError("Missing or insufficient permissions to read interactions.")
+    
+    const fetchInteractions = async () => {
+      try {
+        const response = await apiClient.getStudentInteractions(id as string)
+        if (response.success && response.data) {
+          setInteractions(response.data)
+        }
+      } catch (error) {
+        console.error("Error fetching interactions:", error)
+        setPermError("Failed to load interactions.")
       }
-    )
-    return () => unsub()
+    }
+
+    fetchInteractions()
   }, [id])
 
   const addInteraction = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!id) return
-    const interactionsRef = collection(db, "students", id as string, "interactions")
-    await addDoc(interactionsRef, {
-      type: newType,
-      detail: newDetail,
-      createdAt: serverTimestamp(),
-    })
-    setNewDetail("")
+    
+    try {
+      const response = await apiClient.createInteraction(id as string, {
+        interaction_type: newType,
+        description: newDetail,
+        outcome: null,
+        follow_up_required: false,
+        follow_up_date: null
+      })
+      
+      if (response.success) {
+        // Refresh interactions
+        const interactionsResponse = await apiClient.getStudentInteractions(id as string)
+        if (interactionsResponse.success && interactionsResponse.data) {
+          setInteractions(interactionsResponse.data)
+        }
+        setNewDetail("")
+      }
+    } catch (error) {
+      console.error("Error adding interaction:", error)
+      alert("Failed to add interaction")
+    }
   }
 
   // Communications realtime
   useEffect(() => {
     if (!id) return
-    const ref = collection(db, "students", id as string, "communications")
-    const q = query(ref, orderBy("createdAt", "desc"))
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const items: CommunicationItem[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
-        setCommunications(items)
-      },
-      (err) => {
-        console.error("Communications listener error", err)
-        setPermError("Missing or insufficient permissions to read communications.")
+    
+    const fetchCommunications = async () => {
+      try {
+        const response = await apiClient.getStudentCommunications(id as string)
+        if (response.success && response.data) {
+          setCommunications(response.data)
+        }
+      } catch (error) {
+        console.error("Error fetching communications:", error)
+        setPermError("Failed to load communications.")
       }
-    )
-    return () => unsub()
+    }
+
+    fetchCommunications()
   }, [id])
 
   const addCommunication = async (e: React.FormEvent) => {
@@ -180,19 +200,21 @@ export default function StudentProfilePage() {
       }
 
       // Log the communication
-      const ref = collection(db, "students", id as string, "communications")
-      const payload: any = {
-        channel: commChannel,
-        createdAt: serverTimestamp(),
-      }
-      if (subjectTrimmed) payload.subject = subjectTrimmed
-      if (bodyTrimmed) payload.body = bodyTrimmed
-      await addDoc(ref, payload)
+      const response = await apiClient.createCommunication(id as string, {
+        communication_type: commChannel,
+        subject: subjectTrimmed || null,
+        content: bodyTrimmed,
+        direction: "outbound",
+        status: "sent"
+      })
       
-      // bump lastContactedAt on student
-      await updateDoc(doc(db, "students", id as string), {
-        lastContactedAt: serverTimestamp(),
-      }).catch(() => {})
+      if (response.success) {
+        // Refresh communications
+        const communicationsResponse = await apiClient.getStudentCommunications(id as string)
+        if (communicationsResponse.success && communicationsResponse.data) {
+          setCommunications(communicationsResponse.data)
+        }
+      }
       
       setCommSubject("")
       setCommBody("")
@@ -232,16 +254,21 @@ export default function StudentProfilePage() {
       }
       
       // Log the communication
-      const ref = collection(db, "students", id as string, "communications")
-      await addDoc(ref, { 
-        channel: "email", 
-        subject, 
-        body: html, 
-        createdAt: serverTimestamp() 
+      const response = await apiClient.createCommunication(id as string, {
+        communication_type: "email",
+        subject: subject,
+        content: html,
+        direction: "outbound",
+        status: "sent"
       })
-      await updateDoc(doc(db, "students", id as string), { 
-        lastContactedAt: serverTimestamp() 
-      }).catch(() => {})
+      
+      if (response.success) {
+        // Refresh communications
+        const communicationsResponse = await apiClient.getStudentCommunications(id as string)
+        if (communicationsResponse.success && communicationsResponse.data) {
+          setCommunications(communicationsResponse.data)
+        }
+      }
       
       alert("Follow-up email sent and logged!")
     } catch (error) {
@@ -264,16 +291,25 @@ export default function StudentProfilePage() {
       due: formattedDue,
       studentId: id,
       studentName: student?.name || "Unknown Student",
-      createdAt: serverTimestamp(),
       type: "reminder",
       createdBy: auth.currentUser?.email || "Unknown",
     }
     
     try {
-      // Store in a separate reminders collection for personal use
-      await addDoc(collection(db, "reminders"), reminder)
-      alert("Personal reminder scheduled successfully!")
-      e.currentTarget.reset()
+      // Create reminder via API
+      const response = await apiClient.createReminder({
+        title,
+        description: `Reminder for ${student?.name || "Unknown Student"}`,
+        reminder_date: formattedDue,
+        status: "pending"
+      })
+      
+      if (response.success) {
+        alert("Personal reminder scheduled successfully!")
+        e.currentTarget.reset()
+      } else {
+        alert("Failed to schedule reminder. Please try again.")
+      }
     } catch (error) {
       console.error("Error scheduling reminder:", error)
       alert("Error scheduling reminder. Please try again.")
@@ -283,54 +319,96 @@ export default function StudentProfilePage() {
   const scheduleTask = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!id) return
-    const formData = new FormData(e.currentTarget)
-    const title = (formData.get("taskTitle") as string) || "Follow up"
-    const due = formData.get("taskDue") as string
-    await addDoc(collection(db, "tasks"), {
-      title,
-      due,
-      status: "Pending",
-      studentId: id,
-      studentName: student?.name || "Unknown Student",
-      createdAt: serverTimestamp(),
-      createdBy: auth.currentUser?.email || "Unknown",
-    })
-    alert("Task scheduled and added to shared Tasks.")
-    if (taskFormRef.current) {
-      taskFormRef.current.reset()
+    
+    try {
+      const formData = new FormData(e.currentTarget)
+      const title = (formData.get("taskTitle") as string) || "Follow up"
+      const due = formData.get("taskDue") as string
+      
+      const response = await apiClient.createTask({
+        title,
+        description: `Task for ${student?.name || "Unknown Student"}`,
+        due_date: due,
+        status: "Pending",
+        priority: "Medium",
+        student_id: id,
+        student_name: student?.name || "Unknown Student"
+      })
+      
+      if (response.success) {
+        alert("Task scheduled and added to shared Tasks.")
+        if (taskFormRef.current) {
+          taskFormRef.current.reset()
+        }
+      } else {
+        alert("Failed to create task. Please try again.")
+      }
+    } catch (error) {
+      console.error("Error creating task:", error)
+      alert("Error creating task. Please try again.")
     }
   }
 
   // Notes realtime
   useEffect(() => {
     if (!id) return
-    const ref = collection(db, "students", id as string, "notes")
-    const q = query(ref, orderBy("createdAt", "desc"))
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const items: NoteItem[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
-        setNotes(items)
-      },
-      (err) => {
-        console.error("Notes listener error", err)
-        setPermError("Missing or insufficient permissions to read notes.")
+    
+    const fetchNotes = async () => {
+      try {
+        const response = await apiClient.getStudentNotes(id as string)
+        if (response.success && response.data) {
+          setNotes(response.data)
+        }
+      } catch (error) {
+        console.error("Error fetching notes:", error)
+        setPermError("Failed to load notes.")
       }
-    )
-    return () => unsub()
+    }
+
+    fetchNotes()
   }, [id])
 
   const addNote = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!id || !noteText.trim()) return
-    const ref = collection(db, "students", id as string, "notes")
-    await addDoc(ref, { text: noteText.trim(), createdAt: serverTimestamp() })
-    setNoteText("")
+    
+    try {
+      const response = await apiClient.createNote(id as string, {
+        title: "Internal Note",
+        content: noteText.trim(),
+        is_private: true
+      })
+      
+      if (response.success) {
+        // Refresh notes
+        const notesResponse = await apiClient.getStudentNotes(id as string)
+        if (notesResponse.success && notesResponse.data) {
+          setNotes(notesResponse.data)
+        }
+        setNoteText("")
+      }
+    } catch (error) {
+      console.error("Error adding note:", error)
+      alert("Failed to add note")
+    }
   }
 
   const deleteNote = async (noteId: string) => {
     if (!id) return
-    await deleteDoc(doc(db, "students", id as string, "notes", noteId))
+    
+    try {
+      const response = await apiClient.deleteStudentNote(id as string, noteId)
+      if (response.success) {
+        // Refresh notes
+        const notesResponse = await apiClient.getStudentNotes(id as string)
+        if (notesResponse.success && notesResponse.data) {
+          setNotes(notesResponse.data)
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting note:", error)
+      alert("Failed to delete note")
+    }
   }
 
   const generateAISummary = async () => {
@@ -357,7 +435,8 @@ export default function StudentProfilePage() {
       }))
       
       const recentNotes = notes.slice(0, 3).map(n => ({
-        text: n.text.substring(0, 100) + (n.text.length > 100 ? "..." : ""),
+        text: (n.content || n.text || "").substring(0, 100) + ((n.content || n.text || "").length > 100 ? "..." : ""),
+        content: n.content || n.text || "",
         date: n.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
       }))
       
@@ -444,7 +523,7 @@ export default function StudentProfilePage() {
         if (recentNotes.length > 0) {
           summary += `• Recent notes:\n`
           recentNotes.forEach(note => {
-            summary += `  - ${note.date}: ${note.text}\n`
+            summary += `  - ${note.date}: ${note.content || note.text || "No content"}\n`
           })
         }
         summary += `\n`
@@ -545,9 +624,17 @@ export default function StudentProfilePage() {
                 id="highIntent"
                 checked={student.highIntent || false}
                 onChange={async (e) => {
-                  await updateDoc(doc(db, "students", id as string), {
-                    highIntent: e.target.checked
-                  })
+                  try {
+                    const response = await apiClient.updateStudentCheckboxes(id as string, {
+                      highIntent: e.target.checked
+                    })
+                    if (response.success && response.data) {
+                      setStudent(response.data)
+                    }
+                  } catch (error) {
+                    console.error("Error updating high intent:", error)
+                    alert("Failed to update high intent status")
+                  }
                 }}
                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
               />
@@ -561,9 +648,17 @@ export default function StudentProfilePage() {
                 id="needsEssayHelp"
                 checked={student.needsEssayHelp || false}
                 onChange={async (e) => {
-                  await updateDoc(doc(db, "students", id as string), {
-                    needsEssayHelp: e.target.checked
-                  })
+                  try {
+                    const response = await apiClient.updateStudentCheckboxes(id as string, {
+                      needsEssayHelp: e.target.checked
+                    })
+                    if (response.success && response.data) {
+                      setStudent(response.data)
+                    }
+                  } catch (error) {
+                    console.error("Error updating essay help:", error)
+                    alert("Failed to update essay help status")
+                  }
                 }}
                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
               />
@@ -753,7 +848,7 @@ export default function StudentProfilePage() {
               {notes.map((n) => (
                 <li key={n.id} className="border rounded p-2 bg-white flex items-start justify-between gap-2">
                   <div>
-                    <div className="text-sm whitespace-pre-wrap">{n.text}</div>
+                    <div className="text-sm whitespace-pre-wrap">{n.content || n.text || "No content"}</div>
                     <div className="text-xs text-gray-500">{n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString() : "—"}</div>
                   </div>
                   <Button variant="outline" onClick={() => deleteNote(n.id)}>Delete</Button>
