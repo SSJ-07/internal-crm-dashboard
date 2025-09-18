@@ -1,10 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
 import httpx
-from datetime import datetime
+import jwt
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import Optional, List
 from dotenv import load_dotenv
@@ -24,7 +26,63 @@ from app.services.student_v2_service import StudentV2Service
 # Load environment variables from .env file
 load_dotenv()
 
+# JWT Configuration
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-production")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+security = HTTPBearer()
+
+# Authentication Models
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    access_token: str
+
+class User(BaseModel):
+    id: str
+    email: str
+    name: str
+
 app = FastAPI(title="CRM API with Real Firestore Data")
+
+# Authentication helper functions
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return payload
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+def get_current_user(token_data: dict = Depends(verify_token)):
+    return token_data
 
 # Pydantic models for email
 class EmailSendRequest(BaseModel):
@@ -217,6 +275,63 @@ async def send_email(email_request: EmailSendRequest):
 
 # Initialize Firebase
 db = init_firebase()
+
+# Authentication endpoints
+@app.post("/api/auth/login", response_model=UserResponse)
+async def login(login_data: LoginRequest):
+    """Login with email and password"""
+    try:
+        # For now, we'll use a simple hardcoded user for testing
+        # In production, you'd verify against a user database
+        if login_data.email == "admin@crm.com" and login_data.password == "password":
+            access_token = create_access_token(
+                data={"sub": "admin_user_id", "email": login_data.email, "name": "Admin User"}
+            )
+            return UserResponse(
+                id="admin_user_id",
+                email=login_data.email,
+                name="Admin User",
+                access_token=access_token
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/auth/google", response_model=UserResponse)
+async def google_login(google_data: GoogleLoginRequest):
+    """Login with Google ID token"""
+    try:
+        # For now, we'll create a mock user from Google token
+        # In production, you'd verify the Google ID token
+        access_token = create_access_token(
+            data={"sub": "google_user_id", "email": "user@gmail.com", "name": "Google User"}
+        )
+        return UserResponse(
+            id="google_user_id",
+            email="user@gmail.com",
+            name="Google User",
+            access_token=access_token
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/auth/user")
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """Get current user information"""
+    return {
+        "id": current_user.get("sub"),
+        "email": current_user.get("email"),
+        "name": current_user.get("name")
+    }
+
+@app.post("/api/auth/logout")
+async def logout():
+    """Logout user"""
+    return {"message": "Successfully logged out"}
 
 # Student endpoints
 @app.get("/api/students", response_model=List[Student])
