@@ -382,6 +382,25 @@ async def get_dashboard_stats():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Authentication endpoints
+@app.get("/api/auth/user")
+async def get_current_user():
+    """Get current user information"""
+    # For now, return a mock user since we're not implementing full auth yet
+    # In a real implementation, this would validate JWT tokens or session cookies
+    return {
+        "uid": "mock-user-123",
+        "email": "crm@example.com",
+        "displayName": "CRM Team",
+        "photoURL": None
+    }
+
+@app.post("/api/auth/logout")
+async def logout():
+    """Logout user"""
+    # In a real implementation, this would invalidate JWT tokens or session cookies
+    return {"message": "Logged out successfully"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
