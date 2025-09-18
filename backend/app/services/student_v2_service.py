@@ -651,8 +651,9 @@ class StudentV2Service:
     async def get_student_communications(self, student_id: str) -> List[Communication]:
         """Get all communications for a student"""
         try:
-            communications_ref = self.db.collection("students").document(student_id).collection("communications")
-            docs = communications_ref.order_by("created_at", direction="DESCENDING").stream()
+            # Communications are stored in the timeline subcollection
+            timeline_ref = self.db.collection("students").document(student_id).collection("timeline")
+            docs = timeline_ref.where("type", "==", "communication").stream()
             
             communications = []
             for doc in docs:
@@ -660,6 +661,9 @@ class StudentV2Service:
                 data["id"] = doc.id
                 data["student_id"] = student_id
                 communications.append(self._doc_to_communication(data))
+            
+            # Sort by created_at in Python since Firestore composite index is not available
+            communications.sort(key=lambda x: x.created_at, reverse=True)
             
             return communications
         except Exception as e:

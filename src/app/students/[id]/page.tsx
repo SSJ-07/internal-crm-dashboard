@@ -37,10 +37,13 @@ interface InteractionItem {
 
 interface CommunicationItem {
   id: string
-  channel: "email" | "sms" | "call"
+  channel?: "email" | "sms" | "call"
+  communication_type?: "email" | "sms" | "call"
   subject?: string
   body?: string
-  createdAt: any
+  content?: string
+  created_at: any
+  createdAt?: any
 }
 
 interface NoteItem {
@@ -471,10 +474,10 @@ export default function StudentProfilePage() {
       const lastContactedDate = lastContacted instanceof Date ? lastContacted.toLocaleDateString() : "Never"
       
       const recentCommunications = communications.slice(0, 3).map(c => ({
-        channel: c.channel,
+        channel: c.communication_type || c.channel,
         subject: c.subject,
-        body: c.body?.substring(0, 100) + (c.body && c.body.length > 100 ? "..." : ""),
-        date: c.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
+        body: (c.content || c.body)?.substring(0, 100) + ((c.content || c.body) && (c.content || c.body).length > 100 ? "..." : ""),
+        date: c.created_at?.toDate?.()?.toLocaleDateString() || formatTimestamp(c.created_at || c.createdAt)
       }))
       
       const recentInteractions = interactions.slice(0, 3).map(i => ({
@@ -827,16 +830,16 @@ export default function StudentProfilePage() {
                 {communications.map((c) => (
                   <li key={c.id} className="border rounded p-3 bg-white hover:bg-gray-50 transition-colors">
                     <div className="text-sm font-medium">
-                      <span className="uppercase">{c.channel}</span>
+                      <span className="uppercase">{c.communication_type || c.channel}</span>
                       {c.subject ? <span className="text-gray-600"> · {c.subject}</span> : ""}
                     </div>
-                    {c.body ? (
+                    {(c.content || c.body) ? (
                       <div className="text-sm text-gray-700 mt-2 whitespace-pre-wrap max-h-20 overflow-y-auto">
-                        {c.body}
+                        {c.content || c.body}
                       </div>
                     ) : null}
                     <div className="text-xs text-gray-500 mt-2">
-                      {c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString() : "—"}
+                      {formatTimestamp(c.created_at || c.createdAt)}
                     </div>
                   </li>
                 ))}
