@@ -483,6 +483,16 @@ async def get_student_notes(student_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.put("/api/students/{student_id}/notes/{note_id}")
+async def update_student_note(student_id: str, note_id: str, note_data: dict):
+    """Update a specific note for a student"""
+    try:
+        service = StudentV2Service(db)
+        note = await service.update_student_note(student_id, note_id, note_data)
+        return note
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/api/students/{student_id}/notes/{note_id}")
 async def delete_student_note(student_id: str, note_id: str):
     """Delete a specific note for a student"""

@@ -49,6 +49,7 @@ interface NoteItem {
   content?: string
   title?: string
   createdAt: any
+  isEditing?: boolean
 }
 
 export default function StudentProfilePage() {
@@ -69,6 +70,8 @@ export default function StudentProfilePage() {
   const taskFormRef = useRef<HTMLFormElement>(null)
   const [aiSummary, setAiSummary] = useState<string>("")
   const [generatingSummary, setGeneratingSummary] = useState(false)
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editingNoteText, setEditingNoteText] = useState("")
 
   useEffect(() => {
     if (!id) return
@@ -409,6 +412,52 @@ export default function StudentProfilePage() {
       console.error("Error deleting note:", error)
       alert("Failed to delete note")
     }
+  }
+
+  const startEditingNote = (note: NoteItem) => {
+    setEditingNoteId(note.id)
+    setEditingNoteText(note.content || note.text || "")
+  }
+
+  const cancelEditingNote = () => {
+    setEditingNoteId(null)
+    setEditingNoteText("")
+  }
+
+  const saveEditedNote = async (noteId: string) => {
+    if (!id || !editingNoteText.trim()) return
+    
+    try {
+      const response = await apiClient.updateNote(id as string, noteId, {
+        content: editingNoteText.trim()
+      })
+      
+      if (response.success) {
+        // Refresh notes
+        const notesResponse = await apiClient.getStudentNotes(id as string)
+        if (notesResponse.success && notesResponse.data) {
+          setNotes(notesResponse.data)
+        }
+        setEditingNoteId(null)
+        setEditingNoteText("")
+      }
+    } catch (error) {
+      console.error("Error updating note:", error)
+      alert("Failed to update note")
+    }
+  }
+
+  const formatTimestamp = (timestamp: any) => {
+    if (!timestamp) return "—"
+    
+    // Handle both Firestore timestamp objects and ISO strings
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+      return timestamp.toDate().toLocaleString()
+    } else if (typeof timestamp === 'string') {
+      return new Date(timestamp).toLocaleString()
+    }
+    
+    return "—"
   }
 
   const generateAISummary = async () => {
@@ -847,11 +896,58 @@ export default function StudentProfilePage() {
             <ul className="space-y-2">
               {notes.map((n) => (
                 <li key={n.id} className="border rounded p-2 bg-white flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-sm whitespace-pre-wrap">{n.content || n.text || "No content"}</div>
-                    <div className="text-xs text-gray-500">{n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString() : "—"}</div>
+                  <div className="flex-1">
+                    {editingNoteId === n.id ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editingNoteText}
+                          onChange={(e) => setEditingNoteText(e.target.value)}
+                          className="w-full p-2 border rounded text-sm"
+                          rows={3}
+                          placeholder="Edit note..."
+                        />
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            onClick={() => saveEditedNote(n.id)}
+                            disabled={!editingNoteText.trim()}
+                          >
+                            Save
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={cancelEditingNote}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-sm whitespace-pre-wrap">{n.content || n.text || "No content"}</div>
+                        <div className="text-xs text-gray-500 mt-1">{formatTimestamp(n.createdAt)}</div>
+                      </>
+                    )}
                   </div>
-                  <Button variant="outline" onClick={() => deleteNote(n.id)}>Delete</Button>
+                  {editingNoteId !== n.id && (
+                    <div className="flex gap-1">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => startEditingNote(n)}
+                      >
+                        Edit
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => deleteNote(n.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  )}
                 </li>
               ))}
           </ul>

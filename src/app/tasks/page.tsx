@@ -18,23 +18,27 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { db, auth } from "@/lib/firebase"
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore"
+import { apiClient } from "@/lib/api-client"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Task {
   id: string
   title: string
-  due: string
+  description?: string
+  due_date: string
   status: string
-  studentId?: string
-  studentName?: string
-  deletedAt?: any
-  deletedBy?: string
+  priority?: string
+  student_id?: string
+  student_name?: string
+  deleted_at?: any
+  deleted_by?: string
+  created_at?: any
+  created_by?: string
 }
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
+  const [students, setStudents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
@@ -49,42 +53,82 @@ export default function TasksPage() {
   const [sortField, setSortField] = useState<"title" | "studentName" | "due" | "status">("due")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
 
-  // ✅ Real-time listener
+  // Fetch tasks and students from backend
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "tasks"), (snapshot) => {
-      const tasksData: Task[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Task[]
-      setTasks(tasksData)
-      setLoading(false)
-    })
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        const [tasksResponse, studentsResponse] = await Promise.all([
+          apiClient.getTasks(),
+          apiClient.getStudents()
+        ])
+        
+        if (tasksResponse.success && tasksResponse.data) {
+          setTasks(tasksResponse.data)
+        }
+        
+        if (studentsResponse.success && studentsResponse.data) {
+          setStudents(studentsResponse.data)
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
 
-    return () => unsubscribe()
+    fetchData()
   }, [])
 
   const handleAddTask = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!formRef.current) return
 
-    const formData = new FormData(formRef.current)
-    const newTask = {
-      title: formData.get("title") as string,
-      due: formData.get("due") as string,
-      status: "Pending",
+    try {
+      const formData = new FormData(formRef.current)
+      const selectedStudentId = formData.get("student") as string
+      const selectedStudent = students.find(s => s.id === selectedStudentId)
+      
+      const newTask = {
+        title: formData.get("title") as string,
+        description: formData.get("description") as string || "",
+        due_date: formData.get("due") as string,
+        status: "Pending",
+        priority: "Medium",
+        student_id: selectedStudentId || "standalone",
+        student_name: selectedStudent ? selectedStudent.name : null
+      }
+
+      const response = await apiClient.createTask(newTask)
+      if (response.success) {
+        // Refresh tasks list
+        const tasksResponse = await apiClient.getTasks()
+        if (tasksResponse.success && tasksResponse.data) {
+          setTasks(tasksResponse.data)
+        }
+        
+        formRef.current.reset()
+        setOpen(false)
+      }
+    } catch (error) {
+      console.error("Error creating task:", error)
+      alert("Failed to create task")
     }
-
-    await addDoc(collection(db, "tasks"), newTask)
-
-    formRef.current.reset()
-    setOpen(false)
   }
 
   const handleStatusChange = async (taskId: string, nextStatus: string) => {
     try {
-      await updateDoc(doc(db, "tasks", taskId), { status: nextStatus })
+      const response = await apiClient.updateTask(taskId, { status: nextStatus })
+      if (response.success) {
+        // Refresh tasks list
+        const tasksResponse = await apiClient.getTasks()
+        if (tasksResponse.success && tasksResponse.data) {
+          setTasks(tasksResponse.data)
+        }
+      }
     } catch (error) {
       console.error("Failed updating status", error)
+      alert("Failed to update task status")
     }
   }
 
@@ -92,11 +136,18 @@ export default function TasksPage() {
     if (confirm("Are you sure you want to delete this task? It will be moved to the Deleted Tasks tab.")) {
       try {
         // Instead of deleting, mark as deleted
-        await updateDoc(doc(db, "tasks", taskId), {
-          deletedAt: serverTimestamp(),
-          deletedBy: auth.currentUser?.email || "Unknown",
+        const response = await apiClient.updateTask(taskId, {
+          deleted_at: new Date().toISOString(),
+          deleted_by: "CRM Team",
           status: "Deleted"
         })
+        if (response.success) {
+          // Refresh tasks list
+          const tasksResponse = await apiClient.getTasks()
+          if (tasksResponse.success && tasksResponse.data) {
+            setTasks(tasksResponse.data)
+          }
+        }
       } catch (error) {
         console.error("Failed deleting task", error)
         alert("Failed to delete task")
@@ -106,11 +157,18 @@ export default function TasksPage() {
 
   const handleRestoreTask = async (taskId: string) => {
     try {
-      await updateDoc(doc(db, "tasks", taskId), {
-        deletedAt: null,
-        deletedBy: null,
+      const response = await apiClient.updateTask(taskId, {
+        deleted_at: null,
+        deleted_by: null,
         status: "Pending"
       })
+      if (response.success) {
+        // Refresh tasks list
+        const tasksResponse = await apiClient.getTasks()
+        if (tasksResponse.success && tasksResponse.data) {
+          setTasks(tasksResponse.data)
+        }
+      }
     } catch (error) {
       console.error("Failed restoring task", error)
       alert("Failed to restore task")
@@ -120,7 +178,14 @@ export default function TasksPage() {
   const handlePermanentDelete = async (taskId: string) => {
     if (confirm("Are you sure you want to permanently delete this task? This action cannot be undone.")) {
       try {
-        await deleteDoc(doc(db, "tasks", taskId))
+        const response = await apiClient.deleteTask(taskId)
+        if (response.success) {
+          // Refresh tasks list
+          const tasksResponse = await apiClient.getTasks()
+          if (tasksResponse.success && tasksResponse.data) {
+            setTasks(tasksResponse.data)
+          }
+        }
       } catch (error) {
         console.error("Failed permanently deleting task", error)
         alert("Failed to permanently delete task")
@@ -148,12 +213,12 @@ export default function TasksPage() {
           bValue = b.title.toLowerCase()
           break
         case "studentName":
-          aValue = (a.studentName || "").toLowerCase()
-          bValue = (b.studentName || "").toLowerCase()
+          aValue = (a.student_name || "").toLowerCase()
+          bValue = (b.student_name || "").toLowerCase()
           break
         case "due":
-          aValue = new Date(a.due)
-          bValue = new Date(b.due)
+          aValue = new Date(a.due_date)
+          bValue = new Date(b.due_date)
           break
         case "status":
           aValue = a.status.toLowerCase()
@@ -171,7 +236,14 @@ export default function TasksPage() {
 
   const handleReopenTask = async (taskId: string) => {
     try {
-      await updateDoc(doc(db, "tasks", taskId), { status: "Pending" })
+      const response = await apiClient.updateTask(taskId, { status: "Pending" })
+      if (response.success) {
+        // Refresh tasks list
+        const tasksResponse = await apiClient.getTasks()
+        if (tasksResponse.success && tasksResponse.data) {
+          setTasks(tasksResponse.data)
+        }
+      }
     } catch (error) {
       console.error("Failed reopening task", error)
       alert("Failed to reopen task")
@@ -192,7 +264,21 @@ export default function TasksPage() {
             </DialogHeader>
             <form ref={formRef} className="flex flex-col gap-4 mt-4" onSubmit={handleAddTask}>
               <Input name="title" placeholder="Task title" required />
+              <Input name="description" placeholder="Task description" />
               <Input name="due" type="date" required />
+              <Select name="student">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a student (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No student assigned</SelectItem>
+                  {students.map((student) => (
+                    <SelectItem key={student.id} value={student.id}>
+                      {student.name} ({student.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button type="submit">Save</Button>
             </form>
           </DialogContent>
@@ -337,7 +423,7 @@ export default function TasksPage() {
           <TableBody>
             {sortTasks(tasks
               .filter((task) => {
-                const text = `${task.title} ${task.studentName || ""}`.toLowerCase()
+                const text = `${task.title} ${task.student_name || ""}`.toLowerCase()
                 const matchesSearch = text.includes(search.toLowerCase())
                 const matchesTab = 
                   (activeTab === "all" && task.status !== "Deleted") ||
@@ -347,7 +433,7 @@ export default function TasksPage() {
                   (activeTab === "deleted" && task.status === "Deleted")
                 const matchesStatus = activeTab === "all" ? (statusFilter === "__all" ? true : task.status === statusFilter) : true
                 const matchesStudent = studentFilter
-                  ? (task.studentName || "").toLowerCase().includes(studentFilter.toLowerCase())
+                  ? (task.student_name || "").toLowerCase().includes(studentFilter.toLowerCase())
                   : true
                 return matchesSearch && matchesTab && matchesStatus && matchesStudent
               }))
@@ -355,15 +441,15 @@ export default function TasksPage() {
               <TableRow key={task.id}>
                 <TableCell>{task.title}</TableCell>
                 <TableCell>
-                  {task.studentName ? (
-                    <a href={`/students/${task.studentId}`} className="text-blue-600 hover:underline">
-                      {task.studentName}
+                  {task.student_name ? (
+                    <a href={`/students/${task.student_id}`} className="text-blue-600 hover:underline">
+                      {task.student_name}
                     </a>
                   ) : (
                     "—"
                   )}
                 </TableCell>
-                <TableCell>{task.due}</TableCell>
+                <TableCell>{task.due_date}</TableCell>
                 <TableCell>
                   {activeTab === "finished" ? (
                     <span className="text-green-600 font-medium">Finished</span>

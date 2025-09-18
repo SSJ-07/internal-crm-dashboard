@@ -688,6 +688,30 @@ class StudentV2Service:
             print(f"Error getting student notes: {e}")
             return []
 
+    async def update_student_note(self, student_id: str, note_id: str, note_data: dict) -> Note:
+        """Update a specific note for a student"""
+        try:
+            # Notes are stored in the timeline subcollection
+            note_ref = self.db.collection("students").document(student_id).collection("timeline").document(note_id)
+            
+            # Update the note with new content
+            note_ref.update({
+                "content": note_data.get("content"),
+                "title": note_data.get("title", "Internal Note")
+            })
+            
+            # Get updated note
+            updated_doc = note_ref.get()
+            if updated_doc.exists:
+                data = updated_doc.to_dict()
+                data["id"] = note_id
+                data["student_id"] = student_id
+                return self._doc_to_note(data)
+            else:
+                raise Exception("Note not found after update")
+        except Exception as e:
+            raise Exception(f"Failed to update student note: {str(e)}")
+
     async def delete_student_note(self, student_id: str, note_id: str) -> None:
         """Delete a specific note for a student"""
         try:

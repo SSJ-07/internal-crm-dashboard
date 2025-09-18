@@ -267,6 +267,113 @@ class ApiClient {
       method: 'GET',
     })
   }
+
+  // Authentication
+  async getCurrentUser(): Promise<ApiResponse<any>> {
+    return this.request('/api/auth/user', {
+      method: 'GET',
+    })
+  }
+
+  async logout(): Promise<ApiResponse<any>> {
+    return this.request('/api/auth/logout', {
+      method: 'POST',
+    })
+  }
+
+  // Tasks
+  async getTasks(): Promise<ApiResponse<any[]>> {
+    return this.request('/api/tasks', {
+      method: 'GET',
+    })
+  }
+
+  async createTask(taskData: any): Promise<ApiResponse<any>> {
+    return this.request('/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify(taskData),
+    })
+  }
+
+  async updateTask(taskId: string, taskData: any): Promise<ApiResponse<any>> {
+    return this.request(`/api/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify(taskData),
+    })
+  }
+
+  async deleteTask(taskId: string): Promise<ApiResponse<any>> {
+    return this.request(`/api/tasks/${taskId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Student profile methods
+  async updateStudentLastActive(studentId: string): Promise<ApiResponse<any>> {
+    return this.request(`/api/students/${studentId}/last-active`, {
+      method: 'PUT',
+    })
+  }
+
+  async getStudentInteractions(studentId: string): Promise<ApiResponse<any[]>> {
+    return this.request(`/api/students/${studentId}/interactions`, {
+      method: 'GET',
+    })
+  }
+
+  async getStudentCommunications(studentId: string): Promise<ApiResponse<any[]>> {
+    return this.request(`/api/students/${studentId}/communications`, {
+      method: 'GET',
+    })
+  }
+
+  async getStudentNotes(studentId: string): Promise<ApiResponse<any[]>> {
+    return this.request(`/api/students/${studentId}/notes`, {
+      method: 'GET',
+    })
+  }
+
+  async deleteStudentNote(studentId: string, noteId: string): Promise<ApiResponse<any>> {
+    return this.request(`/api/students/${studentId}/notes/${noteId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async updateStudentCheckboxes(studentId: string, checkboxData: any): Promise<ApiResponse<any>> {
+    return this.request(`/api/students/${studentId}/checkboxes`, {
+      method: 'PUT',
+      body: JSON.stringify(checkboxData),
+    })
+  }
+
+  // Student timeline methods
+  async createInteraction(studentId: string, interactionData: any): Promise<ApiResponse<any>> {
+    return this.request(`/api/students/${studentId}/interactions`, {
+      method: 'POST',
+      body: JSON.stringify(interactionData),
+    })
+  }
+
+  async createCommunication(studentId: string, communicationData: any): Promise<ApiResponse<any>> {
+    return this.request(`/api/students/${studentId}/communications`, {
+      method: 'POST',
+      body: JSON.stringify(communicationData),
+    })
+  }
+
+  async createNote(studentId: string, noteData: any): Promise<ApiResponse<any>> {
+    return this.request(`/api/students/${studentId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(noteData),
+    })
+  }
+
+  async updateNote(studentId: string, noteId: string, noteData: any): Promise<ApiResponse<any>> {
+    return this.request(`/api/students/${studentId}/notes/${noteId}`, {
+      method: 'PUT',
+      body: JSON.stringify(noteData),
+    })
+  }
 }
 
 // Create and export a singleton instance

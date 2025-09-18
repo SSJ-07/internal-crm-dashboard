@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { auth, db } from "@/lib/firebase"
-import { onAuthStateChanged, signOut } from "firebase/auth"
-import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore"
+import { apiClient } from "@/lib/api-client"
 
 // shadcn ui
 import {
@@ -20,57 +18,63 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 interface Reminder {
   id: string
   title: string
-  due: string
-  studentName: string
+  description: string
+  reminder_date: string
+  status: string
+  studentName?: string
   createdAt: any
+}
+
+interface User {
+  uid: string
+  email: string
+  displayName: string
+  photoURL?: string
 }
 
 export default function LayoutClient({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [reminders, setReminders] = useState<Reminder[]>([])
   const router = useRouter()
 
+  // Fetch user and reminders from backend
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      if (!u) router.push("/login")
-      setUser(u)
-      setLoading(false)
-    })
-    return () => unsub()
-  }, [router])
-
-  // Fetch reminders for notification count
-  useEffect(() => {
-    if (!user) return
-    
-    const remindersRef = collection(db, "reminders")
-    const q = query(
-      remindersRef, 
-      where("createdBy", "==", user.email)
-      // Removed orderBy to avoid index requirement - we'll sort in JavaScript instead
-    )
-    
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const remindersData: Reminder[] = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Reminder[]
-        // Sort by due date in JavaScript instead of Firestore
-        remindersData.sort((a, b) => a.due.localeCompare(b.due))
-        console.log("Fetched reminders:", remindersData)
-        setReminders(remindersData)
-      },
-      (error) => {
-        console.error("Error fetching reminders:", error)
-        console.log("Current user:", user?.email)
-        console.log("Error details:", error)
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        
+        // Fetch user data
+        const userResponse = await apiClient.getCurrentUser()
+        if (userResponse.success && userResponse.data) {
+          setUser(userResponse.data)
+        } else {
+          // If no user, redirect to login
+          router.push("/login")
+          return
+        }
+        
+        // Fetch reminders
+        const remindersResponse = await apiClient.getReminders()
+        if (remindersResponse.success && remindersResponse.data) {
+          // Sort by reminder date
+          const sortedReminders = remindersResponse.data.sort((a, b) => 
+            a.reminder_date.localeCompare(b.reminder_date)
+          )
+          setReminders(sortedReminders)
+        }
+        
+      } catch (error) {
+        console.error("Error fetching data:", error)
+        // If there's an error, redirect to login
+        router.push("/login")
+      } finally {
+        setLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
-  }, [user])
+    fetchData()
+  }, [router])
 
   const getUpcomingReminders = () => {
     const today = new Date().toISOString().split('T')[0]
@@ -78,8 +82,8 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
     
     return reminders.filter(reminder => {
       // Ensure we have a valid date string
-      if (!reminder.due) return false
-      return reminder.due >= today && reminder.due <= nextWeek
+      if (!reminder.reminder_date) return false
+      return reminder.reminder_date >= today && reminder.reminder_date <= nextWeek
     })
   }
 
@@ -87,8 +91,8 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
     const today = new Date().toISOString().split('T')[0]
     return reminders.filter(reminder => {
       // Ensure we have a valid date string
-      if (!reminder.due) return false
-      return reminder.due < today
+      if (!reminder.reminder_date) return false
+      return reminder.reminder_date < today
     })
   }
 
@@ -97,8 +101,16 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   const totalReminders = upcomingReminders.length + overdueReminders.length
 
   const handleLogout = async () => {
-    await signOut(auth)
-    router.push("/login")
+    try {
+      await apiClient.logout()
+      setUser(null)
+      router.push("/login")
+    } catch (error) {
+      console.error("Error logging out:", error)
+      // Still redirect to login even if logout fails
+      setUser(null)
+      router.push("/login")
+    }
   }
 
   if (loading) return <p className="p-8">Loading...</p>
@@ -174,8 +186,8 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
                         {overdueReminders.map((reminder) => (
                           <div key={reminder.id} className="p-3 bg-red-50 border-l-4 border-red-400 rounded-r-lg mb-3 hover:bg-red-100 transition-colors">
                             <div className="font-medium text-sm text-gray-800">{reminder.title}</div>
-                            <div className="text-xs text-gray-600 mt-1">Student: {reminder.studentName}</div>
-                            <div className="text-xs text-red-600 font-medium mt-1">Due: {reminder.due}</div>
+                            <div className="text-xs text-gray-600 mt-1">Student: {reminder.studentName || 'General'}</div>
+                            <div className="text-xs text-red-600 font-medium mt-1">Due: {reminder.reminder_date}</div>
                           </div>
                         ))}
                       </div>
@@ -189,8 +201,8 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
                         {upcomingReminders.map((reminder) => (
                           <div key={reminder.id} className="p-3 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg mb-3 hover:bg-blue-100 transition-colors">
                             <div className="font-medium text-sm text-gray-800">{reminder.title}</div>
-                            <div className="text-xs text-gray-600 mt-1">Student: {reminder.studentName}</div>
-                            <div className="text-xs text-blue-600 font-medium mt-1">Due: {reminder.due}</div>
+                            <div className="text-xs text-gray-600 mt-1">Student: {reminder.studentName || 'General'}</div>
+                            <div className="text-xs text-blue-600 font-medium mt-1">Due: {reminder.reminder_date}</div>
                           </div>
                         ))}
                       </div>
