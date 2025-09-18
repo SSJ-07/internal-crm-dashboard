@@ -669,8 +669,9 @@ class StudentV2Service:
     async def get_student_notes(self, student_id: str) -> List[Note]:
         """Get all notes for a student"""
         try:
-            notes_ref = self.db.collection("students").document(student_id).collection("notes")
-            docs = notes_ref.order_by("created_at", direction="DESCENDING").stream()
+            # Notes are stored in the timeline subcollection
+            timeline_ref = self.db.collection("students").document(student_id).collection("timeline")
+            docs = timeline_ref.where("type", "==", "note").stream()
             
             notes = []
             for doc in docs:
@@ -678,6 +679,9 @@ class StudentV2Service:
                 data["id"] = doc.id
                 data["student_id"] = student_id
                 notes.append(self._doc_to_note(data))
+            
+            # Sort by created_at in Python since Firestore composite index is not available
+            notes.sort(key=lambda x: x.created_at, reverse=True)
             
             return notes
         except Exception as e:
@@ -687,7 +691,8 @@ class StudentV2Service:
     async def delete_student_note(self, student_id: str, note_id: str) -> None:
         """Delete a specific note for a student"""
         try:
-            self.db.collection("students").document(student_id).collection("notes").document(note_id).delete()
+            # Notes are stored in the timeline subcollection
+            self.db.collection("students").document(student_id).collection("timeline").document(note_id).delete()
         except Exception as e:
             raise Exception(f"Failed to delete student note: {str(e)}")
 
