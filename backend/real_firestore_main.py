@@ -401,6 +401,47 @@ async def logout():
     # In a real implementation, this would invalidate JWT tokens or session cookies
     return {"message": "Logged out successfully"}
 
+# Tasks endpoints
+@app.get("/api/tasks")
+async def get_tasks():
+    """Get all tasks"""
+    try:
+        service = StudentV2Service(db)
+        tasks = await service.get_all_tasks()
+        return tasks
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/tasks", response_model=Task)
+async def create_task(task_data: TaskCreate):
+    """Create a new task"""
+    try:
+        service = StudentV2Service(db)
+        task = await service.create_standalone_task(task_data)
+        return task
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/tasks/{task_id}")
+async def update_task(task_id: str, task_data: dict):
+    """Update a task"""
+    try:
+        service = StudentV2Service(db)
+        task = await service.update_task(task_id, task_data)
+        return task
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/tasks/{task_id}")
+async def delete_task(task_id: str):
+    """Permanently delete a task"""
+    try:
+        service = StudentV2Service(db)
+        await service.delete_task(task_id)
+        return {"message": "Task deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

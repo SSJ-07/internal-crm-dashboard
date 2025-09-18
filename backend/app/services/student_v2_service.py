@@ -388,17 +388,24 @@ class StudentV2Service:
 
     def _doc_to_task(self, data: Dict[str, Any]) -> Task:
         """Convert Firestore document to Task model"""
+        # Handle both old and new field names
+        created_at = data.get("created_at") or data.get("createdAt")
+        created_by = data.get("created_by") or data.get("createdBy", "Unknown")
+        due_date = data.get("due_date") or data.get("due")
+        student_id = data.get("student_id") or data.get("studentId", "standalone")
+        student_name = data.get("student_name") or data.get("studentName")
+        
         return Task(
             id=data["id"],
-            student_id=data["student_id"],
+            student_id=student_id,
             type=TimelineEventType.TASK,
-            created_at=data["created_at"],
-            created_by=data["created_by"],
+            created_at=created_at,
+            created_by=created_by,
             title=data["title"],
-            description=data["description"],
-            due_date=data.get("due_date"),
+            description=data.get("description", ""),
+            due_date=due_date,
             status=data["status"],
-            priority=data["priority"]
+            priority=data.get("priority", "medium")
         )
 
     def _doc_to_reminder(self, data: Dict[str, Any]) -> Reminder:
@@ -511,3 +518,86 @@ class StudentV2Service:
             }
         except Exception as e:
             raise Exception(f"Failed to get dashboard stats: {str(e)}")
+
+    # Tasks methods
+    async def get_all_tasks(self) -> List[Task]:
+        """Get all standalone tasks"""
+        try:
+            docs = self.db.collection("tasks").stream()
+            tasks = []
+            
+            for doc in docs:
+                data = doc.to_dict()
+                data["id"] = doc.id
+                data["student_id"] = "standalone"  # Standalone tasks don't belong to a specific student
+                tasks.append(self._doc_to_task(data))
+            
+            return tasks
+        except Exception as e:
+            print(f"Error getting tasks: {e}")
+            return []
+
+    async def create_standalone_task(self, task_data: TaskCreate) -> Task:
+        """Create a standalone task"""
+        try:
+            now = datetime.utcnow()
+            firestore_data = {
+                "title": task_data.title,
+                "description": task_data.description,
+                "due_date": task_data.due_date,
+                "status": task_data.status,
+                "priority": task_data.priority,
+                "created_at": now,
+                "created_by": "CRM Team"
+            }
+            
+            doc_ref = self.db.collection("tasks").add(firestore_data)
+            task_id = doc_ref[1].id
+            
+            firestore_data["id"] = task_id
+            firestore_data["student_id"] = "standalone"
+            return self._doc_to_task(firestore_data)
+        except Exception as e:
+            raise Exception(f"Failed to create standalone task: {str(e)}")
+
+    async def update_task(self, task_id: str, update_data: dict) -> Task:
+        """Update a task"""
+        try:
+            task_ref = self.db.collection("tasks").document(task_id)
+            
+            # Convert camelCase to snake_case for Firestore
+            firestore_data = {}
+            for key, value in update_data.items():
+                if key == "due":
+                    firestore_data["due_date"] = value
+                elif key == "studentId":
+                    firestore_data["student_id"] = value
+                elif key == "studentName":
+                    firestore_data["student_name"] = value
+                elif key == "deletedAt":
+                    firestore_data["deleted_at"] = value
+                elif key == "deletedBy":
+                    firestore_data["deleted_by"] = value
+                else:
+                    firestore_data[key] = value
+            
+            task_ref.update(firestore_data)
+            
+            # Get updated task
+            updated_doc = task_ref.get()
+            if updated_doc.exists:
+                data = updated_doc.to_dict()
+                data["id"] = task_id
+                data["student_id"] = "standalone"
+                return self._doc_to_task(data)
+            else:
+                raise Exception("Task not found after update")
+        except Exception as e:
+            raise Exception(f"Failed to update task: {str(e)}")
+
+    async def delete_task(self, task_id: str) -> None:
+        """Permanently delete a task"""
+        try:
+            self.db.collection("tasks").document(task_id).delete()
+        except Exception as e:
+            raise Exception(f"Failed to delete task: {str(e)}")

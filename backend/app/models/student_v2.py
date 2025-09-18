@@ -102,7 +102,7 @@ class Task(TimelineEvent):
     type: TimelineEventType = TimelineEventType.TASK
     title: str
     description: str
-    due_date: Optional[datetime] = None
+    due_date: Optional[str] = None  # Accept date string instead of datetime
     status: str = "pending"  # "pending", "in_progress", "completed", "cancelled"
     priority: str = "medium"  # "low", "medium", "high", "urgent"
 
@@ -141,7 +141,7 @@ class TaskCreate(BaseModel):
     """Create task event"""
     title: str
     description: str
-    due_date: Optional[datetime] = None
+    due_date: Optional[str] = None  # Accept date string instead of datetime
     status: str = "pending"
     priority: str = "medium"
 
