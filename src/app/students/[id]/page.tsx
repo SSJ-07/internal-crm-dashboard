@@ -189,7 +189,7 @@ export default function StudentProfilePage() {
       if (commChannel === "email") {
         try {
           const result = await apiClient.sendEmail({
-            to: student?.email || "", 
+            to: "sumedh.sa.jadhav@gmail.com", // Test email address during testing
             subject: subjectTrimmed, 
             html: bodyTrimmed, 
             from_name: (auth.currentUser?.displayName || "CRM Team")
@@ -236,26 +236,21 @@ export default function StudentProfilePage() {
   }
 
   const sendMockFollowUpEmail = async () => {
-    if (!id || !student?.email) return
+    if (!id || !student?.name) return
     const subject = "Follow-up: Next steps on your application"
     const html = `<p>Hi ${student.name || ''},</p><p>Just checking in to see if you need help with essays or documents.</p><p>Best regards,<br>Your CRM Team</p>`
     
     try {
-      // Send real email
-      const res = await fetch("/api/email/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          to: student.email, 
-          subject, 
-          html, 
-          fromName: (auth.currentUser?.displayName || "CRM Team")
-        }),
+      // Send to test email address during testing
+      const result = await apiClient.sendEmail({
+        to: "sumedh.sa.jadhav@gmail.com", // Test email address
+        subject, 
+        html, 
+        from_name: (auth.currentUser?.displayName || "CRM Team")
       })
       
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        alert(`Failed to send email: ${error?.error || res.statusText}`)
+      if (!result.success) {
+        alert(`Failed to send email: ${result.error || "Unknown error"}`)
         return
       }
       
