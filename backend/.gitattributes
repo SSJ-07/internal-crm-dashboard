@@ -1,0 +1,5 @@
+# Prevent sensitive files from being committed
+**/firebase-adminsdk-*.json filter=git-crypt diff=git-crypt merge=git-crypt
+**/*-firebase-adminsdk-*.json filter=git-crypt diff=git-crypt merge=git-crypt
+**/service-account-*.json filter=git-crypt diff=git-crypt merge=git-crypt
+**/credentials.json filter=git-crypt diff=git-crypt merge=git-crypt
