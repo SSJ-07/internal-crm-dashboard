@@ -405,7 +405,8 @@ class StudentV2Service:
             description=data.get("description", ""),
             due_date=due_date,
             status=data["status"],
-            priority=data.get("priority", "medium")
+            priority=data.get("priority", "medium"),
+            student_name=student_name
         )
 
     def _doc_to_reminder(self, data: Dict[str, Any]) -> Reminder:
@@ -551,11 +552,19 @@ class StudentV2Service:
                 "created_by": "CRM Team"
             }
             
+            # Add student information if provided
+            if hasattr(task_data, 'student_id') and task_data.student_id:
+                firestore_data["student_id"] = task_data.student_id
+            else:
+                firestore_data["student_id"] = "standalone"
+                
+            if hasattr(task_data, 'student_name') and task_data.student_name:
+                firestore_data["student_name"] = task_data.student_name
+            
             doc_ref = self.db.collection("tasks").add(firestore_data)
             task_id = doc_ref[1].id
             
             firestore_data["id"] = task_id
-            firestore_data["student_id"] = "standalone"
             return self._doc_to_task(firestore_data)
         except Exception as e:
             raise Exception(f"Failed to create standalone task: {str(e)}")

@@ -105,6 +105,7 @@ class Task(TimelineEvent):
     due_date: Optional[str] = None  # Accept date string instead of datetime
     status: str = "pending"  # "pending", "in_progress", "completed", "cancelled"
     priority: str = "medium"  # "low", "medium", "high", "urgent"
+    student_name: Optional[str] = None
 
 class Reminder(TimelineEvent):
     """Reminder event"""
@@ -144,6 +145,8 @@ class TaskCreate(BaseModel):
     due_date: Optional[str] = None  # Accept date string instead of datetime
     status: str = "pending"
     priority: str = "medium"
+    student_id: Optional[str] = None
+    student_name: Optional[str] = None
 
 class ReminderCreate(BaseModel):
     """Create reminder event"""
