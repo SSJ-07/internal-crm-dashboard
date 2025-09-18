@@ -26,6 +26,8 @@ interface Student {
   lastContactedAt?: any
   highIntent?: boolean
   needsEssayHelp?: boolean
+  high_intent?: boolean
+  needs_essay_help?: boolean
 }
 
 interface InteractionItem {
@@ -497,10 +499,10 @@ export default function StudentProfilePage() {
       summary += `**Grade:** ${student.grade || "Not specified"}\n\n`
       
       // Classification flags
-      if (student.highIntent || student.needsEssayHelp) {
+      if (student.highIntent || student.high_intent || student.needsEssayHelp || student.needs_essay_help) {
         summary += `**Key Classifications:**\n`
-        if (student.highIntent) summary += `• High Intent Student - Priority candidate\n`
-        if (student.needsEssayHelp) summary += `• Needs Essay Help - Requires additional support\n`
+        if (student.highIntent || student.high_intent) summary += `• High Intent Student - Priority candidate\n`
+        if (student.needsEssayHelp || student.needs_essay_help) summary += `• Needs Essay Help - Requires additional support\n`
         summary += `\n`
       }
       
@@ -581,11 +583,11 @@ export default function StudentProfilePage() {
       // Recommendations
       summary += `**AI Recommendations:**\n`
       
-      if (student.highIntent) {
+      if (student.highIntent || student.high_intent) {
         summary += `• Priority follow-up recommended - this is a high-intent student\n`
       }
       
-      if (student.needsEssayHelp) {
+      if (student.needsEssayHelp || student.needs_essay_help) {
         summary += `• Consider offering essay writing support or resources\n`
       }
       
@@ -669,7 +671,7 @@ export default function StudentProfilePage() {
               <input
                 type="checkbox"
                 id="highIntent"
-                checked={student.highIntent || false}
+                checked={student.highIntent || student.high_intent || false}
                 onChange={async (e) => {
                   try {
                     const response = await apiClient.updateStudentCheckboxes(id as string, {
@@ -693,7 +695,7 @@ export default function StudentProfilePage() {
               <input
                 type="checkbox"
                 id="needsEssayHelp"
-                checked={student.needsEssayHelp || false}
+                checked={student.needsEssayHelp || student.needs_essay_help || false}
                 onChange={async (e) => {
                   try {
                     const response = await apiClient.updateStudentCheckboxes(id as string, {
