@@ -48,7 +48,7 @@ interface NoteItem {
   text?: string
   content?: string
   title?: string
-  createdAt: any
+  created_at: any
   isEditing?: boolean
 }
 
@@ -486,7 +486,7 @@ export default function StudentProfilePage() {
       const recentNotes = notes.slice(0, 3).map(n => ({
         text: (n.content || n.text || "").substring(0, 100) + ((n.content || n.text || "").length > 100 ? "..." : ""),
         content: n.content || n.text || "",
-        date: n.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"
+        date: n.created_at?.toDate?.()?.toLocaleDateString() || formatTimestamp(n.created_at)
       }))
       
       // Generate AI summary based on available data
@@ -926,7 +926,7 @@ export default function StudentProfilePage() {
                     ) : (
                       <>
                         <div className="text-sm whitespace-pre-wrap">{n.content || n.text || "No content"}</div>
-                        <div className="text-xs text-gray-500 mt-1">{formatTimestamp(n.createdAt)}</div>
+                        <div className="text-xs text-gray-500 mt-1">{formatTimestamp(n.created_at)}</div>
                       </>
                     )}
                   </div>
