@@ -21,8 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { db } from "@/lib/firebase"
-import { collection, addDoc, onSnapshot, serverTimestamp } from "firebase/firestore"
+import { apiClient } from "@/lib/api-client"
 
 interface Student {
   id: string
@@ -30,10 +29,15 @@ interface Student {
   email: string
   country: string
   status: string
-  lastActive: any
-  lastContactedAt?: any
-  highIntent?: boolean
-  needsEssayHelp?: boolean
+  last_active: string
+  last_contacted_at?: string
+  high_intent?: boolean
+  needs_essay_help?: boolean
+  phone?: string
+  grade?: string
+  source?: string
+  additional_data?: any
+  created_at: string
 }
 
 export default function StudentsPage() {
@@ -56,41 +60,41 @@ export default function StudentsPage() {
   const [highIntent, setHighIntent] = useState(false)
   const [needsEssayHelp, setNeedsEssayHelp] = useState(false)
 
-  // ✅ Real-time listener (no sort to include legacy docs without createdAt)
+  // Fetch students from FastAPI backend
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, "students"),
-      (snapshot) => {
-        const studentsData: Student[] = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Student[]
-        setStudents(studentsData)
-        setLoading(false)
-      },
-      (error) => {
-        console.error("Students listener error:", error)
+    const fetchStudents = async () => {
+      try {
+        setLoading(true)
+        const response = await apiClient.getStudents()
+        if (response.success && response.data) {
+          setStudents(response.data)
+        } else {
+          console.error("Failed to fetch students:", response.error)
+        }
+      } catch (error) {
+        console.error("Error fetching students:", error)
+      } finally {
         setLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
+    fetchStudents()
   }, [])
 
   // Helper functions to classify students
   const isNotContactedIn7Days = (student: Student) => {
-    if (!student.lastContactedAt) return true // Never contacted
-    const lastContacted = student.lastContactedAt?.toDate?.() || student.lastContactedAt
-    const lastContactedMs = lastContacted instanceof Date ? lastContacted.getTime() : 0
+    if (!student.last_contacted_at) return true // Never contacted
+    const lastContacted = new Date(student.last_contacted_at)
+    const lastContactedMs = lastContacted.getTime()
     return Date.now() - lastContactedMs > 7 * 24 * 60 * 60 * 1000
   }
 
   const isHighIntent = (student: Student) => {
-    return Boolean(student.highIntent)
+    return Boolean(student.high_intent)
   }
 
   const isNeedsEssayHelp = (student: Student) => {
-    return Boolean(student.needsEssayHelp)
+    return Boolean(student.needs_essay_help)
   }
 
   const isInEssayStage = (student: Student) => {
@@ -106,18 +110,27 @@ export default function StudentsPage() {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       country: formData.get("country") as string,
-      status: formData.get("status") as string, // constrained options below
-      lastActive: serverTimestamp(),
-      createdAt: serverTimestamp(),
-      lastContactedAt: serverTimestamp(),
-      highIntent: false,
-      needsEssayHelp: false,
+      status: formData.get("status") as string,
+      high_intent: false,
+      needs_essay_help: false,
     }
 
-    await addDoc(collection(db, "students"), newStudent)
-
-    formRef.current.reset()
-    setOpen(false)
+    try {
+      const response = await apiClient.createStudent(newStudent)
+      if (response.success) {
+        // Refresh the students list
+        const studentsResponse = await apiClient.getStudents()
+        if (studentsResponse.success && studentsResponse.data) {
+          setStudents(studentsResponse.data)
+        }
+        formRef.current.reset()
+        setOpen(false)
+      } else {
+        console.error("Failed to create student:", response.error)
+      }
+    } catch (error) {
+      console.error("Error creating student:", error)
+    }
   }
 
   // Bulk import functionality
@@ -134,39 +147,26 @@ export default function StudentsPage() {
       const students = JSON.parse(text)
       console.log('Parsed students:', students)
       
-      const response = await fetch('/api/students/bulk/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ students, validateOnly: false })
-      })
+      const response = await apiClient.bulkImportStudents(students, false)
       
-      console.log('Response status:', response.status)
-      
-        if (!response.ok) {
-          const errorData = await response.json()
-          console.error('API error:', errorData)
-          setImportResult({ 
-            success: false, 
-            error: errorData.error || `Server error: ${response.status}` 
-          })
-          return
-        }
+      if (response.success && response.data) {
+        console.log('Import result:', response.data)
+        setImportResult(response.data)
         
-        const result = await response.json()
-        console.log('Import result:', result)
-        
-        // Show results even if success is false, as long as we have a proper result object
-        if (result.summary || result.errors || result.imported !== undefined) {
-          setImportResult(result)
-        } else {
-          setImportResult({ 
-            success: false, 
-            error: result.error || "Unknown error occurred" 
-          })
+        // Refresh the students list if import was successful
+        if (response.data.success) {
+          const studentsResponse = await apiClient.getStudents()
+          if (studentsResponse.success && studentsResponse.data) {
+            setStudents(studentsResponse.data)
+          }
         }
-      
-      // Don't clear file input automatically - let user see results
-      // They can manually clear or try again
+      } else {
+        console.error('Import error:', response.error)
+        setImportResult({ 
+          success: false, 
+          error: response.error || "Unknown error occurred" 
+        })
+      }
     } catch (error) {
       console.error('Import error:', error)
       setImportResult({ 
@@ -181,21 +181,24 @@ export default function StudentsPage() {
   // Export functionality
   const handleExport = async (format: 'csv' | 'json') => {
     try {
-      const response = await fetch('/api/students/bulk/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ format })
-      })
+      const response = await apiClient.exportStudents(format)
       
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `students_export.${format}`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      if (response.success && response.data) {
+        // Create blob from the file data
+        const blob = new Blob([response.data.file_data], { 
+          type: response.data.content_type 
+        })
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = response.data.filename
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } else {
+        console.error('Export error:', response.error)
+      }
     } catch (error) {
       console.error('Export error:', error)
     }
@@ -582,12 +585,10 @@ export default function StudentsPage() {
                     <TableCell>{s.country}</TableCell>
                     <TableCell>{s.status}</TableCell>
                     <TableCell>{
-                      // Firestore Timestamp -> readable date
-                      s?.lastActive?.toDate
-                        ? s.lastActive.toDate().toISOString().split("T")[0]
-                        : typeof s.lastActive === "string"
-                          ? s.lastActive
-                          : "—"
+                      // Format last active date
+                      s.last_active
+                        ? new Date(s.last_active).toISOString().split("T")[0]
+                        : "—"
                     }</TableCell>
                   </TableRow>
                 ))}

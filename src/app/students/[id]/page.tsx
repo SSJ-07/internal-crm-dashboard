@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useRef } from "react"
 import { useParams } from "next/navigation"
 import { db, auth } from "@/lib/firebase"
 import { doc, onSnapshot, serverTimestamp, updateDoc, collection, addDoc, query, orderBy, deleteDoc } from "firebase/firestore"
+import { apiClient } from "@/lib/api-client"
 import {
   Card,
   CardContent,
@@ -160,20 +161,20 @@ export default function StudentProfilePage() {
     try {
       // If it's an email, send it first
       if (commChannel === "email") {
-        const res = await fetch("/api/email/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
+        try {
+          const result = await apiClient.sendEmail({
             to: student?.email || "", 
             subject: subjectTrimmed, 
             html: bodyTrimmed, 
-            fromName: (auth.currentUser?.displayName || "CRM Team")
-          }),
-        })
-        
-        if (!res.ok) {
-          const error = await res.json().catch(() => ({}))
-          alert(`Failed to send email: ${error?.error || res.statusText}`)
+            from_name: (auth.currentUser?.displayName || "CRM Team")
+          })
+          
+          if (!result.success) {
+            alert(`Failed to send email: ${result.error || "Unknown error"}`)
+            return
+          }
+        } catch (error) {
+          alert(`Failed to send email: ${error}`)
           return
         }
       }
