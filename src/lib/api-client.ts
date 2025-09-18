@@ -246,6 +246,27 @@ class ApiClient {
       method: 'POST',
     })
   }
+
+  // Reminders
+  async getReminders(): Promise<ApiResponse<any[]>> {
+    return this.request('/api/reminders', {
+      method: 'GET',
+    })
+  }
+
+  async createReminder(reminderData: any): Promise<ApiResponse<any>> {
+    return this.request('/api/reminders', {
+      method: 'POST',
+      body: JSON.stringify(reminderData),
+    })
+  }
+
+  // Dashboard
+  async getDashboardStats(): Promise<ApiResponse<any>> {
+    return this.request('/api/dashboard/stats', {
+      method: 'GET',
+    })
+  }
 }
 
 // Create and export a singleton instance

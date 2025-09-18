@@ -1,9 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { db } from "@/lib/firebase"
-import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore"
-import { auth } from "@/lib/firebase"
+import { apiClient } from "@/lib/api-client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
@@ -22,63 +20,62 @@ interface Student {
 interface Reminder {
   id: string
   title: string
-  due: string
-  studentName: string
+  description: string
+  reminder_date: string
+  status: string
+  studentName?: string
   createdAt: any
+}
+
+interface DashboardStats {
+  total_students: number
+  status_breakdown: Record<string, number>
+  country_breakdown: Record<string, number>
+  high_intent_count: number
+  needs_essay_help_count: number
+  upcoming_reminders: number
+  overdue_reminders: number
+  total_reminders: number
 }
 
 export default function Home() {
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [students, setStudents] = useState<Student[]>([])
+  const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Fetch dashboard data from backend
   useEffect(() => {
-    if (!auth.currentUser) {
-      setLoading(false)
-      return
-    }
-    
-    const remindersRef = collection(db, "reminders")
-    const q = query(
-      remindersRef, 
-      where("createdBy", "==", auth.currentUser.email)
-      // Removed orderBy to avoid index requirement - we'll sort in JavaScript instead
-    )
-    
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const remindersData: Reminder[] = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Reminder[]
-        // Sort by due date in JavaScript instead of Firestore
-        remindersData.sort((a, b) => a.due.localeCompare(b.due))
-        setReminders(remindersData)
-        setLoading(false)
-      },
-      (error) => {
-        console.error("Error fetching reminders:", error)
-        console.log("Current user:", auth.currentUser?.email)
-        console.log("Error details:", error)
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true)
+        
+        // Fetch reminders
+        const remindersResponse = await apiClient.getReminders()
+        if (remindersResponse.success && remindersResponse.data) {
+          setReminders(remindersResponse.data)
+        }
+        
+        // Fetch students
+        const studentsResponse = await apiClient.getStudents()
+        if (studentsResponse.success && studentsResponse.data) {
+          setStudents(studentsResponse.data)
+        }
+        
+        // Fetch dashboard stats
+        const statsResponse = await apiClient.getDashboardStats()
+        if (statsResponse.success) {
+          setStats(statsResponse.data)
+        }
+        
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error)
+      } finally {
         setLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
-    setLoading(false)
-  }, [])
-
-  // Fetch students data for dashboard stats
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "students"), (snapshot) => {
-      const studentsData: Student[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Student[]
-      setStudents(studentsData)
-    })
-
-    return () => unsubscribe()
+    fetchDashboardData()
   }, [])
 
   const getUpcomingReminders = () => {
@@ -87,8 +84,8 @@ export default function Home() {
     
     return reminders.filter(reminder => {
       // Ensure we have a valid date string
-      if (!reminder.due) return false
-      return reminder.due >= today && reminder.due <= nextWeek
+      if (!reminder.reminder_date) return false
+      return reminder.reminder_date >= today && reminder.reminder_date <= nextWeek
     })
   }
 
@@ -96,8 +93,8 @@ export default function Home() {
     const today = new Date().toISOString().split('T')[0]
     return reminders.filter(reminder => {
       // Ensure we have a valid date string
-      if (!reminder.due) return false
-      return reminder.due < today
+      if (!reminder.reminder_date) return false
+      return reminder.reminder_date < today
     })
   }
 
@@ -137,8 +134,8 @@ export default function Home() {
                     <div key={reminder.id} className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded">
                       <div>
                         <p className="font-medium">{reminder.title}</p>
-                        <p className="text-sm text-gray-600">Student: {reminder.studentName}</p>
-                        <p className="text-sm text-red-600">Due: {reminder.due}</p>
+                        <p className="text-sm text-gray-600">Student: {reminder.studentName || 'General'}</p>
+                        <p className="text-sm text-red-600">Due: {reminder.reminder_date}</p>
                       </div>
                     </div>
                   ))}
@@ -154,8 +151,8 @@ export default function Home() {
                     <div key={reminder.id} className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded">
                       <div>
                         <p className="font-medium">{reminder.title}</p>
-                        <p className="text-sm text-gray-600">Student: {reminder.studentName}</p>
-                        <p className="text-sm text-blue-600">Due: {reminder.due}</p>
+                        <p className="text-sm text-gray-600">Student: {reminder.studentName || 'General'}</p>
+                        <p className="text-sm text-blue-600">Due: {reminder.reminder_date}</p>
                       </div>
                     </div>
                   ))}
@@ -174,12 +171,14 @@ export default function Home() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600">{students.length}</div>
+              <div className="text-3xl font-bold text-blue-600">
+                {stats?.total_students || students.length}
+              </div>
               <div className="text-sm text-gray-600">Total Students</div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-green-600">
-                {students.filter(s => s.status === "Applying" || s.status === "Submitted").length}
+                {(stats?.status_breakdown?.["Applying"] || 0) + (stats?.status_breakdown?.["Submitted"] || 0)}
               </div>
               <div className="text-sm text-gray-600">In Essay Stage</div>
             </div>
@@ -196,7 +195,7 @@ export default function Home() {
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-purple-600">
-                {students.filter(s => s.highIntent).length}
+                {stats?.high_intent_count || students.filter(s => s.highIntent).length}
               </div>
               <div className="text-sm text-gray-600">High Intent</div>
             </div>
@@ -213,25 +212,25 @@ export default function Home() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-gray-600">
-                {students.filter(s => s.status === "Exploring").length}
+                {stats?.status_breakdown?.["Exploring"] || students.filter(s => s.status === "Exploring").length}
               </div>
               <div className="text-sm text-gray-600">Exploring</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-yellow-600">
-                {students.filter(s => s.status === "Shortlisting").length}
+                {stats?.status_breakdown?.["Shortlisting"] || students.filter(s => s.status === "Shortlisting").length}
               </div>
               <div className="text-sm text-gray-600">Shortlisting</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">
-                {students.filter(s => s.status === "Applying").length}
+                {stats?.status_breakdown?.["Applying"] || students.filter(s => s.status === "Applying").length}
               </div>
               <div className="text-sm text-gray-600">Applying</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">
-                {students.filter(s => s.status === "Submitted").length}
+                {stats?.status_breakdown?.["Submitted"] || students.filter(s => s.status === "Submitted").length}
               </div>
               <div className="text-sm text-gray-600">Submitted</div>
             </div>
