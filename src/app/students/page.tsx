@@ -90,11 +90,15 @@ export default function StudentsPage() {
   }
 
   const isHighIntent = (student: Student) => {
-    return Boolean(student.high_intent)
+    const result = Boolean(student.high_intent)
+    console.log(`Student ${student.name}: high_intent=${student.high_intent}, isHighIntent=${result}`)
+    return result
   }
 
   const isNeedsEssayHelp = (student: Student) => {
-    return Boolean(student.needs_essay_help)
+    const result = Boolean(student.needs_essay_help)
+    console.log(`Student ${student.name}: needs_essay_help=${student.needs_essay_help}, isNeedsEssayHelp=${result}`)
+    return result
   }
 
   const isInEssayStage = (student: Student) => {
@@ -564,10 +568,16 @@ export default function StudentsPage() {
                       matchesQuick = matchesQuick && isNotContactedIn7Days(s)
                     }
                     if (highIntent) {
-                      matchesQuick = matchesQuick && isHighIntent(s)
+                      const isHigh = isHighIntent(s)
+                      console.log(`Filtering for high intent: ${s.name}, isHigh=${isHigh}, matchesQuick before=${matchesQuick}`)
+                      matchesQuick = matchesQuick && isHigh
+                      console.log(`matchesQuick after=${matchesQuick}`)
                     }
                     if (needsEssayHelp) {
-                      matchesQuick = matchesQuick && isNeedsEssayHelp(s)
+                      const isEssay = isNeedsEssayHelp(s)
+                      console.log(`Filtering for essay help: ${s.name}, isEssay=${isEssay}, matchesQuick before=${matchesQuick}`)
+                      matchesQuick = matchesQuick && isEssay
+                      console.log(`matchesQuick after=${matchesQuick}`)
                     }
                     return matchesSearch && matchesStatus && matchesCountry && matchesQuick
                   })
