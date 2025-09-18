@@ -64,11 +64,22 @@ export default function StudentsPage() {
   const fetchStudents = async () => {
     try {
       setLoading(true)
-      const response = await apiClient.getStudents()
-      if (response.success && response.data) {
-        setStudents(response.data)
+      // Force fresh data with timestamp
+      const timestamp = Date.now()
+      const response = await fetch(`http://localhost:8000/api/students?t=${timestamp}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
+      
+      const data = await response.json()
+      if (data) {
+        setStudents(data)
       } else {
-        console.error("Failed to fetch students:", response.error)
+        console.error("Failed to fetch fresh students data")
       }
     } catch (error) {
       console.error("Error fetching students:", error)
@@ -533,30 +544,15 @@ export default function StudentsPage() {
         </Button>
         <Button 
           variant={highIntent ? "default" : "outline"} 
-          onClick={() => {
-            console.log("High intent clicked, current state:", highIntent)
-            setHighIntent(!highIntent)
-          }}
+          onClick={() => setHighIntent(!highIntent)}
         >
           High intent
         </Button>
         <Button 
           variant={needsEssayHelp ? "default" : "outline"} 
-          onClick={() => {
-            console.log("Needs essay help clicked, current state:", needsEssayHelp)
-            setNeedsEssayHelp(!needsEssayHelp)
-          }}
+          onClick={() => setNeedsEssayHelp(!needsEssayHelp)}
         >
           Needs essay help
-        </Button>
-        <Button 
-          variant="outline" 
-          onClick={() => {
-            console.log("Refreshing students data...")
-            fetchStudents()
-          }}
-        >
-          Refresh
         </Button>
       </div>
 
@@ -587,8 +583,8 @@ export default function StudentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {students
-                  .filter((s) => {
+                {(() => {
+                  const filteredStudents = students.filter((s) => {
                     const text = `${s.name} ${s.email}`.toLowerCase()
                     const matchesSearch = text.includes(search.toLowerCase())
                     const matchesStatus = statusFilter === "__all" ? true : s.status === statusFilter
@@ -602,33 +598,17 @@ export default function StudentsPage() {
                     }
                     
                     if (highIntent) {
-                      const isHigh = isHighIntent(s)
-                      console.log(`High intent filter: ${s.name}, high_intent=${s.high_intent}, isHigh=${isHigh}`)
-                      matchesQuick = matchesQuick && isHigh
+                      matchesQuick = matchesQuick && isHighIntent(s)
                     }
                     
                     if (needsEssayHelp) {
-                      const isEssay = isNeedsEssayHelp(s)
-                      console.log(`Essay help filter: ${s.name}, needs_essay_help=${s.needs_essay_help}, isEssay=${isEssay}`)
-                      matchesQuick = matchesQuick && isEssay
+                      matchesQuick = matchesQuick && isNeedsEssayHelp(s)
                     }
                     
-                    const finalMatch = matchesSearch && matchesStatus && matchesCountry && matchesQuick
-                    if (highIntent || needsEssayHelp) {
-                      console.log(`Final result for ${s.name}:`, {
-                        matchesSearch,
-                        matchesStatus,
-                        matchesCountry,
-                        matchesQuick,
-                        finalMatch,
-                        highIntent,
-                        needsEssayHelp
-                      })
-                    }
-                    
-                    return finalMatch
+                    return matchesSearch && matchesStatus && matchesCountry && matchesQuick
                   })
-                  .map((s) => (
+                  
+                  return filteredStudents.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell>
                       <a
@@ -648,7 +628,8 @@ export default function StudentsPage() {
                         : "—"
                     }</TableCell>
                   </TableRow>
-                ))}
+                  ))
+                })()}
               </TableBody>
             </Table>
           </div>

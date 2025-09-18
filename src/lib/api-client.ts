@@ -120,6 +120,10 @@ class ApiClient {
     
     const response = await this.request<any>(endpoint, {
       method: 'GET',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      },
     })
     
     // Handle the response format from our simple backend
