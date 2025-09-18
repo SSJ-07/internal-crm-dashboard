@@ -530,7 +530,7 @@ class StudentV2Service:
             for doc in docs:
                 data = doc.to_dict()
                 data["id"] = doc.id
-                data["student_id"] = "standalone"  # Standalone tasks don't belong to a specific student
+                # Don't override student_id - let _doc_to_task handle the field mapping
                 tasks.append(self._doc_to_task(data))
             
             return tasks
