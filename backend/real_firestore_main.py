@@ -442,6 +442,67 @@ async def delete_task(task_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Additional student profile endpoints
+@app.put("/api/students/{student_id}/last-active")
+async def update_student_last_active(student_id: str):
+    """Update student's last active timestamp"""
+    try:
+        service = StudentV2Service(db)
+        student = await service.update_student_last_active(student_id)
+        return student
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/students/{student_id}/interactions")
+async def get_student_interactions(student_id: str):
+    """Get all interactions for a student"""
+    try:
+        service = StudentV2Service(db)
+        interactions = await service.get_student_interactions(student_id)
+        return interactions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/students/{student_id}/communications")
+async def get_student_communications(student_id: str):
+    """Get all communications for a student"""
+    try:
+        service = StudentV2Service(db)
+        communications = await service.get_student_communications(student_id)
+        return communications
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/students/{student_id}/notes")
+async def get_student_notes(student_id: str):
+    """Get all notes for a student"""
+    try:
+        service = StudentV2Service(db)
+        notes = await service.get_student_notes(student_id)
+        return notes
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/students/{student_id}/notes/{note_id}")
+async def delete_student_note(student_id: str, note_id: str):
+    """Delete a specific note for a student"""
+    try:
+        service = StudentV2Service(db)
+        await service.delete_student_note(student_id, note_id)
+        return {"message": "Note deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/students/{student_id}/checkboxes")
+async def update_student_checkboxes(student_id: str, checkbox_data: dict):
+    """Update student checkboxes (high_intent, needs_essay_help)"""
+    try:
+        service = StudentV2Service(db)
+        student = await service.update_student_checkboxes(student_id, checkbox_data)
+        return student
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

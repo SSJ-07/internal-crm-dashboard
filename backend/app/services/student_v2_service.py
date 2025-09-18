@@ -610,3 +610,111 @@ class StudentV2Service:
             self.db.collection("tasks").document(task_id).delete()
         except Exception as e:
             raise Exception(f"Failed to delete task: {str(e)}")
+
+    # Student profile methods
+    async def update_student_last_active(self, student_id: str) -> Student:
+        """Update student's last active timestamp"""
+        try:
+            now = datetime.utcnow()
+            student_ref = self.db.collection("students").document(student_id)
+            student_ref.update({"last_active": now})
+            
+            # Get updated student
+            updated_doc = student_ref.get()
+            if updated_doc.exists:
+                data = updated_doc.to_dict()
+                data["id"] = student_id
+                return self._doc_to_student(data)
+            else:
+                raise Exception("Student not found after update")
+        except Exception as e:
+            raise Exception(f"Failed to update student last active: {str(e)}")
+
+    async def get_student_interactions(self, student_id: str) -> List[Interaction]:
+        """Get all interactions for a student"""
+        try:
+            interactions_ref = self.db.collection("students").document(student_id).collection("interactions")
+            docs = interactions_ref.order_by("created_at", direction="DESCENDING").stream()
+            
+            interactions = []
+            for doc in docs:
+                data = doc.to_dict()
+                data["id"] = doc.id
+                data["student_id"] = student_id
+                interactions.append(self._doc_to_interaction(data))
+            
+            return interactions
+        except Exception as e:
+            print(f"Error getting student interactions: {e}")
+            return []
+
+    async def get_student_communications(self, student_id: str) -> List[Communication]:
+        """Get all communications for a student"""
+        try:
+            communications_ref = self.db.collection("students").document(student_id).collection("communications")
+            docs = communications_ref.order_by("created_at", direction="DESCENDING").stream()
+            
+            communications = []
+            for doc in docs:
+                data = doc.to_dict()
+                data["id"] = doc.id
+                data["student_id"] = student_id
+                communications.append(self._doc_to_communication(data))
+            
+            return communications
+        except Exception as e:
+            print(f"Error getting student communications: {e}")
+            return []
+
+    async def get_student_notes(self, student_id: str) -> List[Note]:
+        """Get all notes for a student"""
+        try:
+            notes_ref = self.db.collection("students").document(student_id).collection("notes")
+            docs = notes_ref.order_by("created_at", direction="DESCENDING").stream()
+            
+            notes = []
+            for doc in docs:
+                data = doc.to_dict()
+                data["id"] = doc.id
+                data["student_id"] = student_id
+                notes.append(self._doc_to_note(data))
+            
+            return notes
+        except Exception as e:
+            print(f"Error getting student notes: {e}")
+            return []
+
+    async def delete_student_note(self, student_id: str, note_id: str) -> None:
+        """Delete a specific note for a student"""
+        try:
+            self.db.collection("students").document(student_id).collection("notes").document(note_id).delete()
+        except Exception as e:
+            raise Exception(f"Failed to delete student note: {str(e)}")
+
+    async def update_student_checkboxes(self, student_id: str, checkbox_data: dict) -> Student:
+        """Update student checkboxes (high_intent, needs_essay_help)"""
+        try:
+            student_ref = self.db.collection("students").document(student_id)
+            
+            # Convert camelCase to snake_case for Firestore
+            firestore_data = {}
+            for key, value in checkbox_data.items():
+                if key == "highIntent":
+                    firestore_data["high_intent"] = value
+                elif key == "needsEssayHelp":
+                    firestore_data["needs_essay_help"] = value
+                else:
+                    firestore_data[key] = value
+            
+            student_ref.update(firestore_data)
+            
+            # Get updated student
+            updated_doc = student_ref.get()
+            if updated_doc.exists:
+                data = updated_doc.to_dict()
+                data["id"] = student_id
+                return self._doc_to_student(data)
+            else:
+                raise Exception("Student not found after update")
+        except Exception as e:
+            raise Exception(f"Failed to update student checkboxes: {str(e)}")
