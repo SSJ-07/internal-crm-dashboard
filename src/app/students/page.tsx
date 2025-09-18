@@ -61,24 +61,36 @@ export default function StudentsPage() {
   const [needsEssayHelp, setNeedsEssayHelp] = useState(false)
 
   // Fetch students from FastAPI backend
+  const fetchStudents = async () => {
+    try {
+      setLoading(true)
+      const response = await apiClient.getStudents()
+      if (response.success && response.data) {
+        setStudents(response.data)
+      } else {
+        console.error("Failed to fetch students:", response.error)
+      }
+    } catch (error) {
+      console.error("Error fetching students:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    const fetchStudents = async () => {
-      try {
-        setLoading(true)
-        const response = await apiClient.getStudents()
-        if (response.success && response.data) {
-          setStudents(response.data)
-        } else {
-          console.error("Failed to fetch students:", response.error)
-        }
-      } catch (error) {
-        console.error("Error fetching students:", error)
-      } finally {
-        setLoading(false)
+    fetchStudents()
+  }, [])
+
+  // Refresh students data when page becomes visible (e.g., when navigating back from student profile)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchStudents()
       }
     }
 
-    fetchStudents()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
   // Helper functions to classify students
@@ -90,15 +102,11 @@ export default function StudentsPage() {
   }
 
   const isHighIntent = (student: Student) => {
-    const result = Boolean(student.high_intent)
-    console.log(`Student ${student.name}: high_intent=${student.high_intent}, isHighIntent=${result}`)
-    return result
+    return Boolean(student.high_intent)
   }
 
   const isNeedsEssayHelp = (student: Student) => {
-    const result = Boolean(student.needs_essay_help)
-    console.log(`Student ${student.name}: needs_essay_help=${student.needs_essay_help}, isNeedsEssayHelp=${result}`)
-    return result
+    return Boolean(student.needs_essay_help)
   }
 
   const isInEssayStage = (student: Student) => {
@@ -517,14 +525,38 @@ export default function StudentsPage() {
         />
 
         {/* Quick filters */}
-        <Button variant={notContacted7d ? "default" : "outline"} onClick={() => setNotContacted7d(!notContacted7d)}>
+        <Button 
+          variant={notContacted7d ? "default" : "outline"} 
+          onClick={() => setNotContacted7d(!notContacted7d)}
+        >
           Not contacted in 7 days
         </Button>
-        <Button variant={highIntent ? "default" : "outline"} onClick={() => setHighIntent(!highIntent)}>
+        <Button 
+          variant={highIntent ? "default" : "outline"} 
+          onClick={() => {
+            console.log("High intent clicked, current state:", highIntent)
+            setHighIntent(!highIntent)
+          }}
+        >
           High intent
         </Button>
-        <Button variant={needsEssayHelp ? "default" : "outline"} onClick={() => setNeedsEssayHelp(!needsEssayHelp)}>
+        <Button 
+          variant={needsEssayHelp ? "default" : "outline"} 
+          onClick={() => {
+            console.log("Needs essay help clicked, current state:", needsEssayHelp)
+            setNeedsEssayHelp(!needsEssayHelp)
+          }}
+        >
           Needs essay help
+        </Button>
+        <Button 
+          variant="outline" 
+          onClick={() => {
+            console.log("Refreshing students data...")
+            fetchStudents()
+          }}
+        >
+          Refresh
         </Button>
       </div>
 
@@ -564,22 +596,37 @@ export default function StudentsPage() {
                       ? (s.country || "").toLowerCase().includes(countryFilter.toLowerCase())
                       : true
                     let matchesQuick = true
+                    
                     if (notContacted7d) {
                       matchesQuick = matchesQuick && isNotContactedIn7Days(s)
                     }
+                    
                     if (highIntent) {
                       const isHigh = isHighIntent(s)
-                      console.log(`Filtering for high intent: ${s.name}, isHigh=${isHigh}, matchesQuick before=${matchesQuick}`)
+                      console.log(`High intent filter: ${s.name}, high_intent=${s.high_intent}, isHigh=${isHigh}`)
                       matchesQuick = matchesQuick && isHigh
-                      console.log(`matchesQuick after=${matchesQuick}`)
                     }
+                    
                     if (needsEssayHelp) {
                       const isEssay = isNeedsEssayHelp(s)
-                      console.log(`Filtering for essay help: ${s.name}, isEssay=${isEssay}, matchesQuick before=${matchesQuick}`)
+                      console.log(`Essay help filter: ${s.name}, needs_essay_help=${s.needs_essay_help}, isEssay=${isEssay}`)
                       matchesQuick = matchesQuick && isEssay
-                      console.log(`matchesQuick after=${matchesQuick}`)
                     }
-                    return matchesSearch && matchesStatus && matchesCountry && matchesQuick
+                    
+                    const finalMatch = matchesSearch && matchesStatus && matchesCountry && matchesQuick
+                    if (highIntent || needsEssayHelp) {
+                      console.log(`Final result for ${s.name}:`, {
+                        matchesSearch,
+                        matchesStatus,
+                        matchesCountry,
+                        matchesQuick,
+                        finalMatch,
+                        highIntent,
+                        needsEssayHelp
+                      })
+                    }
+                    
+                    return finalMatch
                   })
                   .map((s) => (
                   <TableRow key={s.id}>
