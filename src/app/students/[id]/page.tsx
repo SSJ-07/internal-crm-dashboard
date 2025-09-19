@@ -473,7 +473,7 @@ export default function StudentProfilePage() {
       const recentCommunications = communications.slice(0, 3).map(c => ({
         channel: c.communication_type || c.channel,
         subject: c.subject,
-        body: (c.content || c.body)?.substring(0, 100) + ((c.content || c.body) && (c.content || c.body).length > 100 ? "..." : ""),
+        body: (c.content || c.body || "").substring(0, 100) + ((c.content || c.body || "").length > 100 ? "..." : ""),
         date: c.created_at?.toDate?.()?.toLocaleDateString() || formatTimestamp(c.created_at || c.createdAt)
       }))
       
@@ -524,7 +524,8 @@ export default function StudentProfilePage() {
       if (communications.length > 0) {
         summary += `**Communication Activity:** ${communications.length} total communications\n`
         const channelCounts = communications.reduce((acc, c) => {
-          acc[c.channel] = (acc[c.channel] || 0) + 1
+          const channel = c.channel || c.communication_type || 'unknown'
+          acc[channel] = (acc[channel] || 0) + 1
           return acc
         }, {} as Record<string, number>)
         
@@ -535,7 +536,7 @@ export default function StudentProfilePage() {
         if (recentCommunications.length > 0) {
           summary += `• Recent communications:\n`
           recentCommunications.forEach(comm => {
-            summary += `  - ${comm.channel.toUpperCase()} (${comm.date}): ${comm.subject || "No subject"}\n`
+            summary += `  - ${(comm.channel || 'unknown').toUpperCase()} (${comm.date}): ${comm.subject || "No subject"}\n`
           })
         }
         summary += `\n`
