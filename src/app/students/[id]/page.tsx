@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from "react"
 import { useParams } from "next/navigation"
-import { auth } from "@/lib/firebase"
+import { auth } from "@/lib/auth"
 import { apiClient } from "@/lib/api-client"
 import {
   Card,
@@ -194,7 +194,7 @@ export default function StudentProfilePage() {
             to: "sumedh.sa.jadhav@gmail.com", // Test email address during testing
             subject: subjectTrimmed, 
             html: bodyTrimmed, 
-            from_name: (auth.currentUser?.displayName || "CRM Team")
+            from_name: (auth.currentUser?.name || "CRM Team")
           })
           
           if (!result.success) {
@@ -248,7 +248,7 @@ export default function StudentProfilePage() {
         to: "sumedh.sa.jadhav@gmail.com", // Test email address
         subject, 
         html, 
-        from_name: (auth.currentUser?.displayName || "CRM Team")
+        from_name: (auth.currentUser?.name || "CRM Team")
       })
       
       if (!result.success) {

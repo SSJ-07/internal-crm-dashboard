@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { apiClient } from "@/lib/api-client"
+import { onAuthChange, logout, auth } from "@/lib/auth"
 
 // shadcn ui
 import {
@@ -26,10 +26,9 @@ interface Reminder {
 }
 
 interface User {
-  uid: string
+  id: string
   email: string
-  displayName: string
-  photoURL?: string
+  name: string
 }
 
 export default function LayoutClient({ children }: { children: React.ReactNode }) {
@@ -38,42 +37,19 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   const [reminders, setReminders] = useState<Reminder[]>([])
   const router = useRouter()
 
-  // Fetch user and reminders from backend
+  // Set up Firebase Auth listener
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        
-        // Fetch user data
-        const userResponse = await apiClient.getCurrentUser()
-        if (userResponse.success && userResponse.data) {
-          setUser(userResponse.data)
-        } else {
-          // If no user, redirect to login
-          router.push("/login")
-          return
-        }
-        
-        // Fetch reminders
-        const remindersResponse = await apiClient.getReminders()
-        if (remindersResponse.success && remindersResponse.data) {
-          // Sort by reminder date
-          const sortedReminders = remindersResponse.data.sort((a, b) => 
-            a.reminder_date.localeCompare(b.reminder_date)
-          )
-          setReminders(sortedReminders)
-        }
-        
-      } catch (error) {
-        console.error("Error fetching data:", error)
-        // If there's an error, redirect to login
-        router.push("/login")
-      } finally {
-        setLoading(false)
+    const unsubscribe = onAuthChange((user) => {
+      setUser(user)
+      setLoading(false)
+      
+      if (!user) {
+        // User not authenticated, redirect to login
+        router.push('/login')
       }
-    }
+    })
 
-    fetchData()
+    return unsubscribe
   }, [router])
 
   const getUpcomingReminders = () => {
@@ -102,7 +78,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
 
   const handleLogout = async () => {
     try {
-      await apiClient.logout()
+      await logout()
       setUser(null)
       router.push("/login")
     } catch (error) {
@@ -116,7 +92,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   if (loading) return <p className="p-8">Loading...</p>
 
   const initials =
-    user?.displayName?.split(" ").map((s: string) => s[0]).join("").toUpperCase()
+    user?.name?.split(" ").map((s: string) => s[0]).join("").toUpperCase()
     || (user?.email ? user.email[0].toUpperCase() : "U")
 
   const isAuthenticated = !!user
@@ -216,7 +192,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
             <DropdownMenu>
               <DropdownMenuTrigger className="outline-none">
                 <Avatar className="h-9 w-9 cursor-pointer">
-                  <AvatarImage src={user?.photoURL ?? undefined} alt={user?.displayName || "User"} />
+                  <AvatarImage src={undefined} alt={user?.name || "User"} />
                   <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
@@ -224,7 +200,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
                 {isAuthenticated ? (
                   <>
                     <DropdownMenuLabel className="space-y-1">
-                      <div className="text-sm font-medium">{user?.displayName || "User"}</div>
+                      <div className="text-sm font-medium">{user?.name || "User"}</div>
                       <div className="text-xs text-gray-500 truncate">{user?.email}</div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />

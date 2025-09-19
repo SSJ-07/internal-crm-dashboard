@@ -22,12 +22,12 @@ class ApiClient {
 
   private getAuthToken(): string | null {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('auth_token')
+      return localStorage.getItem('firebase_id_token')
     }
     return null
   }
 
-  private async request<T>(
+  async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
@@ -40,7 +40,7 @@ class ApiClient {
 
     // Add auth token if available
     if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`
+      (headers as any)['Authorization'] = `Bearer ${this.token}`
     }
 
     try {
@@ -279,11 +279,6 @@ class ApiClient {
     })
   }
 
-  async logout(): Promise<ApiResponse<any>> {
-    return this.request('/api/auth/logout', {
-      method: 'POST',
-    })
-  }
 
   // Tasks
   async getTasks(): Promise<ApiResponse<any[]>> {
