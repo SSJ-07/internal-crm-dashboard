@@ -64,6 +64,7 @@ export default function StudentsPage() {
   const fetchStudents = async () => {
     try {
       setLoading(true)
+      
       // Force fresh data with timestamp
       const timestamp = Date.now()
       const response = await fetch(`http://localhost:8000/api/students?t=${timestamp}`, {
@@ -81,6 +82,7 @@ export default function StudentsPage() {
       } else {
         console.error("Failed to fetch fresh students data")
       }
+      
     } catch (error) {
       console.error("Error fetching students:", error)
     } finally {

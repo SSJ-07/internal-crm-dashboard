@@ -112,7 +112,7 @@ class Reminder(TimelineEvent):
     type: TimelineEventType = TimelineEventType.REMINDER
     title: str
     description: str
-    reminder_date: datetime
+    reminder_date: str  # Accept date string instead of datetime
     status: str = "pending"  # "pending", "sent", "completed", "cancelled"
 
 # Create models for timeline events
@@ -152,5 +152,5 @@ class ReminderCreate(BaseModel):
     """Create reminder event"""
     title: str
     description: str
-    reminder_date: datetime
+    reminder_date: str  # Accept date string instead of datetime
     status: str = "pending"

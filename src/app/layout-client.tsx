@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { onAuthChange, logout, auth } from "@/lib/auth"
+import { useReminders } from "@/lib/reminders-context"
 
 // shadcn ui
 import {
@@ -15,16 +16,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-interface Reminder {
-  id: string
-  title: string
-  description: string
-  reminder_date: string
-  status: string
-  studentName?: string
-  createdAt: any
-}
-
 interface User {
   id: string
   email: string
@@ -34,8 +25,8 @@ interface User {
 export default function LayoutClient({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
-  const [reminders, setReminders] = useState<Reminder[]>([])
   const router = useRouter()
+  const { getUpcomingReminders, getOverdueReminders, updateReminder } = useReminders()
 
   // Set up Firebase Auth listener
   useEffect(() => {
@@ -51,26 +42,6 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
 
     return unsubscribe
   }, [router])
-
-  const getUpcomingReminders = () => {
-    const today = new Date().toISOString().split('T')[0]
-    const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    
-    return reminders.filter(reminder => {
-      // Ensure we have a valid date string
-      if (!reminder.reminder_date) return false
-      return reminder.reminder_date >= today && reminder.reminder_date <= nextWeek
-    })
-  }
-
-  const getOverdueReminders = () => {
-    const today = new Date().toISOString().split('T')[0]
-    return reminders.filter(reminder => {
-      // Ensure we have a valid date string
-      if (!reminder.reminder_date) return false
-      return reminder.reminder_date < today
-    })
-  }
 
   const upcomingReminders = getUpcomingReminders()
   const overdueReminders = getOverdueReminders()
@@ -105,6 +76,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
         <nav className="flex flex-col gap-2 p-4">
           <a href="/" className="px-3 py-2 rounded hover:bg-gray-800">Dashboard</a>
           <a href="/students" className="px-3 py-2 rounded hover:bg-gray-800">Students</a>
+          <a href="/communications" className="px-3 py-2 rounded hover:bg-gray-800">Communications</a>
           <a href="/tasks" className="px-3 py-2 rounded hover:bg-gray-800">Tasks</a>
           <a href="/settings" className="px-3 py-2 rounded hover:bg-gray-800">Settings</a>
         </nav>
@@ -155,30 +127,40 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
                   <div className="max-h-64 overflow-y-auto">
                     {overdueReminders.length > 0 && (
                       <div className="p-3">
-                        <div className="text-sm font-semibold text-red-600 mb-3 flex items-center gap-2">
-                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                        <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                          <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
                           Overdue ({overdueReminders.length})
                         </div>
                         {overdueReminders.map((reminder) => (
-                          <div key={reminder.id} className="p-3 bg-red-50 border-l-4 border-red-400 rounded-r-lg mb-3 hover:bg-red-100 transition-colors">
+                          <div 
+                            key={reminder.id} 
+                            className="p-3 bg-gray-50 border-l-4 border-orange-400 rounded-r-lg mb-3 hover:bg-gray-100 transition-colors cursor-pointer"
+                            onClick={() => updateReminder(reminder.id, { status: 'completed' })}
+                          >
                             <div className="font-medium text-sm text-gray-800">{reminder.title}</div>
                             <div className="text-xs text-gray-600 mt-1">Student: {reminder.studentName || 'General'}</div>
-                            <div className="text-xs text-red-600 font-medium mt-1">Due: {reminder.reminder_date}</div>
+                            <div className="text-xs text-orange-600 font-medium mt-1">Due: {reminder.reminder_date}</div>
+                            <div className="text-xs text-gray-500 mt-1">Click to mark as completed</div>
                           </div>
                         ))}
                       </div>
                     )}
                     {upcomingReminders.length > 0 && (
                       <div className="p-3">
-                        <div className="text-sm font-semibold text-blue-600 mb-3 flex items-center gap-2">
+                        <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                           <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                           Upcoming ({upcomingReminders.length})
                         </div>
                         {upcomingReminders.map((reminder) => (
-                          <div key={reminder.id} className="p-3 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg mb-3 hover:bg-blue-100 transition-colors">
+                          <div 
+                            key={reminder.id} 
+                            className="p-3 bg-gray-50 border-l-4 border-blue-400 rounded-r-lg mb-3 hover:bg-gray-100 transition-colors cursor-pointer"
+                            onClick={() => updateReminder(reminder.id, { status: 'completed' })}
+                          >
                             <div className="font-medium text-sm text-gray-800">{reminder.title}</div>
                             <div className="text-xs text-gray-600 mt-1">Student: {reminder.studentName || 'General'}</div>
                             <div className="text-xs text-blue-600 font-medium mt-1">Due: {reminder.reminder_date}</div>
+                            <div className="text-xs text-gray-500 mt-1">Click to mark as completed</div>
                           </div>
                         ))}
                       </div>

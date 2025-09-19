@@ -380,6 +380,30 @@ class ApiClient {
       method: 'POST',
     })
   }
+
+  // Communications
+  async getAllCommunications(): Promise<ApiResponse<any[]>> {
+    return this.request('/api/communications', {
+      method: 'GET',
+    })
+  }
+
+  // Interactions
+  async getAllInteractions(): Promise<ApiResponse<any[]>> {
+    const response = await this.request<any[]>('/api/interactions', {
+      method: 'GET',
+    })
+    
+    // Handle the response format from our simple backend
+    if (response.success && Array.isArray(response.data)) {
+      return {
+        success: true,
+        data: response.data
+      }
+    }
+    
+    return response
+  }
 }
 
 // Create and export a singleton instance

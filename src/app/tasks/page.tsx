@@ -58,18 +58,20 @@ export default function TasksPage() {
     const fetchData = async () => {
       try {
         setLoading(true)
-        const [tasksResponse, studentsResponse] = await Promise.all([
-          apiClient.getTasks(),
-          apiClient.getStudents()
-        ])
         
-        if (tasksResponse.success && tasksResponse.data) {
-          setTasks(tasksResponse.data)
-        }
+      const [tasksResponse, studentsResponse] = await Promise.all([
+        apiClient.getTasks(),
+        apiClient.getStudents()
+      ])
+      
+      if (tasksResponse.success && tasksResponse.data) {
+        setTasks(tasksResponse.data)
+      }
+      
+      if (studentsResponse.success && studentsResponse.data) {
+        setStudents(studentsResponse.data)
+      }
         
-        if (studentsResponse.success && studentsResponse.data) {
-          setStudents(studentsResponse.data)
-        }
       } catch (error) {
         console.error("Error fetching data:", error)
       } finally {

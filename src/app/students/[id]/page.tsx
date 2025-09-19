@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useRef } from "react"
 import { useParams } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { apiClient } from "@/lib/api-client"
+import { useReminders } from "@/lib/reminders-context"
 import {
   Card,
   CardContent,
@@ -33,8 +34,11 @@ interface Student {
 interface InteractionItem {
   id: string
   type: string
+  interaction_type?: string
   detail?: string
+  description?: string
   createdAt: any
+  created_at?: any
 }
 
 interface CommunicationItem {
@@ -46,6 +50,11 @@ interface CommunicationItem {
   content?: string
   created_at: any
   createdAt?: any
+  student_id?: string
+  student_name?: string
+  student_email?: string
+  direction?: string
+  status?: string
 }
 
 interface NoteItem {
@@ -60,10 +69,11 @@ interface NoteItem {
 export default function StudentProfilePage() {
   const params = useParams()
   const { id } = params // ID from URL
+  const { addReminder } = useReminders()
   const [student, setStudent] = useState<Student | null>(null)
   const [loading, setLoading] = useState(true)
   const [interactions, setInteractions] = useState<InteractionItem[]>([])
-  const [newType, setNewType] = useState("login")
+  const [newType, setNewType] = useState("login_activity")
   const [newDetail, setNewDetail] = useState("")
   const [communications, setCommunications] = useState<CommunicationItem[]>([])
   const [commChannel, setCommChannel] = useState<"email" | "sms" | "call">("email")
@@ -77,6 +87,7 @@ export default function StudentProfilePage() {
   const [generatingSummary, setGeneratingSummary] = useState(false)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNoteText, setEditingNoteText] = useState("")
+  
 
   useEffect(() => {
     if (!id) return
@@ -84,14 +95,16 @@ export default function StudentProfilePage() {
     const fetchStudent = async () => {
       try {
         setLoading(true)
-        const response = await apiClient.getStudent(id as string)
-        if (response.success && response.data) {
-          setStudent(response.data)
-          // Mark last active on view
-          await apiClient.updateStudentLastActive(id as string)
-        } else {
-          setStudent(null)
-        }
+        
+      const response = await apiClient.getStudent(id as string)
+      if (response.success && response.data) {
+        setStudent(response.data)
+        // Mark last active on view
+        await apiClient.updateStudentLastActive(id as string)
+      } else {
+        setStudent(null)
+      }
+        
       } catch (error) {
         console.error("Error fetching student:", error)
         setStudent(null)
@@ -116,10 +129,11 @@ export default function StudentProfilePage() {
     
     const fetchInteractions = async () => {
       try {
-        const response = await apiClient.getStudentInteractions(id as string)
-        if (response.success && response.data) {
-          setInteractions(response.data)
-        }
+      const response = await apiClient.getStudentInteractions(id as string)
+      if (response.success && response.data) {
+        setInteractions(response.data)
+      }
+        
       } catch (error) {
         console.error("Error fetching interactions:", error)
         setPermError("Failed to load interactions.")
@@ -162,10 +176,11 @@ export default function StudentProfilePage() {
     
     const fetchCommunications = async () => {
       try {
-        const response = await apiClient.getStudentCommunications(id as string)
-        if (response.success && response.data) {
-          setCommunications(response.data)
-        }
+      const response = await apiClient.getStudentCommunications(id as string)
+      if (response.success && response.data) {
+        setCommunications(response.data)
+      }
+        
       } catch (error) {
         console.error("Error fetching communications:", error)
         setPermError("Failed to load communications.")
@@ -282,37 +297,30 @@ export default function StudentProfilePage() {
   const scheduleReminder = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!id) return
-    const formData = new FormData(e.currentTarget)
+    
+    // Store the form reference before async operations
+    const form = e.currentTarget
+    const formData = new FormData(form)
     const title = (formData.get("reminderTitle") as string) || "Follow up"
     const due = formData.get("reminderDue") as string
     
     // Ensure date is in YYYY-MM-DD format for proper comparison
     const formattedDue = new Date(due).toISOString().split('T')[0]
     
-    const reminder = {
-      title,
-      due: formattedDue,
-      studentId: id,
-      studentName: student?.name || "Unknown Student",
-      type: "reminder",
-      createdBy: auth.currentUser?.email || "Unknown",
-    }
-    
     try {
-      // Create reminder via API
-      const response = await apiClient.createReminder({
+      // Add reminder via API (which will also update the context)
+      await addReminder({
         title,
         description: `Reminder for ${student?.name || "Unknown Student"}`,
         reminder_date: formattedDue,
-        status: "pending"
+        status: "pending",
+        studentName: student?.name || "Unknown Student",
+        isPersonal: true
       })
       
-      if (response.success) {
-        alert("Personal reminder scheduled successfully!")
-        e.currentTarget.reset()
-      } else {
-        alert("Failed to schedule reminder. Please try again.")
-      }
+      alert("Personal reminder scheduled successfully!")
+      // Reset the form using the stored reference
+      form.reset()
     } catch (error) {
       console.error("Error scheduling reminder:", error)
       alert("Error scheduling reminder. Please try again.")
@@ -358,10 +366,11 @@ export default function StudentProfilePage() {
     
     const fetchNotes = async () => {
       try {
-        const response = await apiClient.getStudentNotes(id as string)
-        if (response.success && response.data) {
-          setNotes(response.data)
-        }
+      const response = await apiClient.getStudentNotes(id as string)
+      if (response.success && response.data) {
+        setNotes(response.data)
+      }
+        
       } catch (error) {
         console.error("Error fetching notes:", error)
         setPermError("Failed to load notes.")
@@ -481,6 +490,7 @@ export default function StudentProfilePage() {
       setGeneratingSummary(false)
     }
   }
+
 
   if (loading) return <p>Loading...</p>
   if (!student) return <p>No student found.</p>
@@ -617,10 +627,9 @@ export default function StudentProfilePage() {
               onChange={(e) => setNewType(e.target.value)}
               className="border rounded p-2"
             >
-              <option value="login">Login</option>
-              <option value="ai_question">AI Question</option>
-              <option value="document_submitted">Document Submitted</option>
-              <option value="other">Other</option>
+              <option value="login_activity">Login Activity</option>
+              <option value="ai_questions_asked">AI Questions Asked</option>
+              <option value="documents_submitted">Documents Submitted</option>
             </select>
             <Input
               placeholder="Details (optional)"

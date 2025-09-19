@@ -143,6 +143,32 @@ async def root():
 async def health():
     return {"status": "healthy"}
 
+@app.get("/test")
+async def test():
+    return {"message": "Test endpoint working", "timestamp": datetime.now().isoformat()}
+
+@app.get("/debug/firestore")
+async def debug_firestore():
+    """Debug Firestore connection and basic query"""
+    try:
+        if not db:
+            return {"error": "Firestore not initialized"}
+        
+        # Test basic collection query
+        start_time = datetime.now()
+        students_ref = db.collection("students")
+        docs = list(students_ref.limit(5).stream())
+        end_time = datetime.now()
+        
+        return {
+            "message": "Firestore query successful",
+            "query_time_ms": (end_time - start_time).total_seconds() * 1000,
+            "doc_count": len(docs),
+            "sample_doc": docs[0].to_dict() if docs else None
+        }
+    except Exception as e:
+        return {"error": str(e), "timestamp": datetime.now().isoformat()}
+
 @app.get("/api/students/")
 async def get_students():
     if not db:
@@ -151,56 +177,33 @@ async def get_students():
     try:
         print("🔍 Fetching students from Firestore...")
         
-        # Get all students from Firestore
-        students_ref = db.collection('students')
-        docs = students_ref.stream()
+        # Use the service for better performance
+        service = StudentV2Service(db)
+        students = await service.get_students()
         
-        students = []
-        for doc in docs:
-            student_data = doc.to_dict()
-            student_data['id'] = doc.id
-            
-            # Convert Firestore timestamps to ISO strings
-            if 'createdAt' in student_data and hasattr(student_data['createdAt'], 'isoformat'):
-                student_data['created_at'] = student_data['createdAt'].isoformat()
-            else:
-                student_data['created_at'] = str(student_data.get('createdAt', ''))
-                
-            if 'lastActive' in student_data and hasattr(student_data['lastActive'], 'isoformat'):
-                student_data['last_active'] = student_data['lastActive'].isoformat()
-            else:
-                student_data['last_active'] = str(student_data.get('lastActive', ''))
-                
-            if 'lastContactedAt' in student_data and student_data['lastContactedAt']:
-                if hasattr(student_data['lastContactedAt'], 'isoformat'):
-                    student_data['last_contacted_at'] = student_data['lastContactedAt'].isoformat()
-                else:
-                    student_data['last_contacted_at'] = str(student_data['lastContactedAt'])
-            else:
-                student_data['last_contacted_at'] = None
-            
-            # Map field names to match frontend expectations
-            mapped_student = {
-                'id': student_data.get('id'),
-                'name': student_data.get('name'),
-                'email': student_data.get('email'),
-                'country': student_data.get('country'),
-                'status': student_data.get('status'),
-                'last_active': student_data.get('last_active'),
-                'last_contacted_at': student_data.get('last_contacted_at'),
-                'high_intent': student_data.get('highIntent', False),
-                'needs_essay_help': student_data.get('needsEssayHelp', False),
-                'phone': student_data.get('phone'),
-                'grade': student_data.get('grade'),
-                'source': student_data.get('source'),
-                'additional_data': student_data.get('additionalData'),
-                'created_at': student_data.get('created_at')
+        # Convert to dict format for API response
+        students_data = []
+        for student in students:
+            student_dict = {
+                "id": student.id,
+                "name": student.name,
+                "email": student.email,
+                "country": student.country,
+                "phone": student.phone,
+                "grade": student.grade,
+                "source": student.source,
+                "status": student.status.value,
+                "last_active": student.last_active.isoformat() if student.last_active else None,
+                "last_contacted_at": student.last_contacted_at.isoformat() if student.last_contacted_at else None,
+                "high_intent": student.high_intent,
+                "needs_essay_help": student.needs_essay_help,
+                "created_at": student.created_at.isoformat() if student.created_at else None,
+                "additional_data": student.additional_data
             }
-            
-            students.append(mapped_student)
+            students_data.append(student_dict)
         
-        print(f"✅ Found {len(students)} students in Firestore")
-        return {"students": students}
+        print(f"✅ Found {len(students_data)} students in Firestore")
+        return {"students": students_data}
         
     except Exception as e:
         print(f"❌ Error fetching students: {e}")
@@ -596,6 +599,26 @@ async def get_student_notes(student_id: str):
         service = StudentV2Service(db)
         notes = await service.get_student_notes(student_id)
         return notes
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/communications")
+async def get_all_communications():
+    """Get all communications across all students"""
+    try:
+        service = StudentV2Service(db)
+        communications = await service.get_all_communications()
+        return communications
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/interactions")
+async def get_all_interactions():
+    """Get all interactions across all students"""
+    try:
+        service = StudentV2Service(db)
+        interactions = await service.get_all_interactions()
+        return interactions
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
