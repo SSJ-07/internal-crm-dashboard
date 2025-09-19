@@ -22,6 +22,7 @@ from app.models.student_v2 import (
     TimelineEventType
 )
 from app.services.student_v2_service import StudentV2Service
+from app.services.ai_service import ai_service
 
 # Load environment variables from .env file
 load_dotenv()
@@ -615,6 +616,37 @@ async def delete_student_note(student_id: str, note_id: str):
         service = StudentV2Service(db)
         await service.delete_student_note(student_id, note_id)
         return {"message": "Note deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/students/{student_id}/ai-summary")
+async def generate_ai_summary(student_id: str):
+    """Generate AI-powered summary for a student"""
+    try:
+        service = StudentV2Service(db)
+        
+        # Get student data
+        student = await service.get_student(student_id)
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        # Get related data
+        communications = await service.get_student_communications(student_id)
+        interactions = await service.get_student_interactions(student_id)
+        notes = await service.get_student_notes(student_id)
+        
+        # Prepare data for AI
+        student_data = {
+            "student": student,
+            "communications": communications,
+            "interactions": interactions,
+            "notes": notes
+        }
+        
+        # Generate AI summary
+        summary = await ai_service.generate_student_summary(student_data)
+        
+        return {"summary": summary}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

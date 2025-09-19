@@ -1,0 +1,47 @@
+/Users/sumedhjadhav/Documents/Projects/internal-crm-dashboard/backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [63909]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+E0000 00:00:1758247316.645113 11141108 alts_credentials.cc:93] ALTS creds ignored. Not running on GCP and untrusted ALTS is not enabled.
+/Users/sumedhjadhav/Documents/Projects/internal-crm-dashboard/backend/venv/lib/python3.9/site-packages/google/cloud/firestore_v1/base_collection.py:304: UserWarning: Detected filter using positional arguments. Prefer using the 'filter' keyword argument instead.
+  return query.where(field_path, op_string, value)
+E0000 00:00:1758247317.376145 11141108 alts_credentials.cc:93] ALTS creds ignored. Not running on GCP and untrusted ALTS is not enabled.
+Initializing Firebase with project ID: internal-crm-dashboard
+Using service account: ./internal-crm-dashboard-firebase-adminsdk-fbsvc-5922f27c61.json
+✅ Firebase initialized successfully with service account
+Error generating AI summary: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+INFO:     127.0.0.1:54328 - "POST /api/students/EFG3sZTilNca83WhRB5N/ai-summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54358 - "OPTIONS /api/students/EFG3sZTilNca83WhRB5N HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54359 - "OPTIONS /api/students/EFG3sZTilNca83WhRB5N/interactions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54360 - "OPTIONS /api/students/EFG3sZTilNca83WhRB5N/communications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54361 - "OPTIONS /api/students/EFG3sZTilNca83WhRB5N/notes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54358 - "GET /api/students/EFG3sZTilNca83WhRB5N HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54359 - "GET /api/students/EFG3sZTilNca83WhRB5N/interactions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54360 - "GET /api/students/EFG3sZTilNca83WhRB5N/communications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54361 - "GET /api/students/EFG3sZTilNca83WhRB5N/notes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54358 - "GET /api/students/EFG3sZTilNca83WhRB5N/communications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "GET /api/students/EFG3sZTilNca83WhRB5N HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54359 - "GET /api/students/EFG3sZTilNca83WhRB5N/notes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54361 - "OPTIONS /api/students/EFG3sZTilNca83WhRB5N/last-active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54363 - "GET /api/students/EFG3sZTilNca83WhRB5N/interactions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54360 - "OPTIONS /api/students/EFG3sZTilNca83WhRB5N/last-active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54362 - "PUT /api/students/EFG3sZTilNca83WhRB5N/last-active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54358 - "PUT /api/students/EFG3sZTilNca83WhRB5N/last-active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54363 - "OPTIONS /api/students/EFG3sZTilNca83WhRB5N/ai-summary HTTP/1.1" 200 OK
+Error generating AI summary: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+INFO:     127.0.0.1:54359 - "POST /api/students/EFG3sZTilNca83WhRB5N/ai-summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54391 - "GET /api/students/EFG3sZTilNca83WhRB5N HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54393 - "GET /api/students/EFG3sZTilNca83WhRB5N/interactions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54394 - "GET /api/students/EFG3sZTilNca83WhRB5N/communications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54395 - "GET /api/students/EFG3sZTilNca83WhRB5N/notes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54391 - "GET /api/students/EFG3sZTilNca83WhRB5N HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54395 - "GET /api/students/EFG3sZTilNca83WhRB5N/interactions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54394 - "GET /api/students/EFG3sZTilNca83WhRB5N/communications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54393 - "GET /api/students/EFG3sZTilNca83WhRB5N/notes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54397 - "PUT /api/students/EFG3sZTilNca83WhRB5N/last-active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54391 - "PUT /api/students/EFG3sZTilNca83WhRB5N/last-active HTTP/1.1" 200 OK
+Error generating AI summary: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+INFO:     127.0.0.1:54401 - "POST /api/students/EFG3sZTilNca83WhRB5N/ai-summary HTTP/1.1" 200 OK
