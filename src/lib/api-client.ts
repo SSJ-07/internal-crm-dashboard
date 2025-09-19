@@ -373,6 +373,13 @@ class ApiClient {
       body: JSON.stringify(noteData),
     })
   }
+
+  // AI Summary
+  async generateAISummary(studentId: string): Promise<ApiResponse<{ summary: string }>> {
+    return this.request(`/api/students/${studentId}/ai-summary`, {
+      method: 'POST',
+    })
+  }
 }
 
 // Create and export a singleton instance

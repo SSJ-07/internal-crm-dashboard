@@ -157,10 +157,6 @@ class StudentV2Service:
         """Get timeline events for a student"""
         try:
             timeline_ref = self.db.collection(self.students_collection).document(student_id).collection("timeline")
-            
-            if event_type:
-                timeline_ref = timeline_ref.where("type", "==", event_type.value)
-            
             docs = timeline_ref.order_by("created_at", direction=firestore.Query.DESCENDING).stream()
             events = []
             
@@ -169,16 +165,21 @@ class StudentV2Service:
                 data["id"] = doc.id
                 data["student_id"] = student_id
                 
-                event_type = data.get("type")
-                if event_type == "interaction":
+                doc_event_type = data.get("type")
+                
+                # Filter by event type if specified
+                if event_type and doc_event_type != event_type.value:
+                    continue
+                
+                if doc_event_type == "interaction":
                     events.append(self._doc_to_interaction(data))
-                elif event_type == "communication":
+                elif doc_event_type == "communication":
                     events.append(self._doc_to_communication(data))
-                elif event_type == "note":
+                elif doc_event_type == "note":
                     events.append(self._doc_to_note(data))
-                elif event_type == "task":
+                elif doc_event_type == "task":
                     events.append(self._doc_to_task(data))
-                elif event_type == "reminder":
+                elif doc_event_type == "reminder":
                     events.append(self._doc_to_reminder(data))
             
             return events
@@ -633,16 +634,20 @@ class StudentV2Service:
     async def get_student_interactions(self, student_id: str) -> List[Interaction]:
         """Get all interactions for a student"""
         try:
-            interactions_ref = self.db.collection("students").document(student_id).collection("interactions")
-            docs = interactions_ref.order_by("created_at", direction="DESCENDING").stream()
+            # Get all timeline events and filter for interactions
+            timeline_ref = self.db.collection("students").document(student_id).collection("timeline")
+            docs = timeline_ref.stream()
             
             interactions = []
             for doc in docs:
                 data = doc.to_dict()
-                data["id"] = doc.id
-                data["student_id"] = student_id
-                interactions.append(self._doc_to_interaction(data))
+                if data.get("type") == "interaction":
+                    data["id"] = doc.id
+                    data["student_id"] = student_id
+                    interactions.append(self._doc_to_interaction(data))
             
+            # Sort by created_at descending
+            interactions.sort(key=lambda x: x.created_at, reverse=True)
             return interactions
         except Exception as e:
             print(f"Error getting student interactions: {e}")
