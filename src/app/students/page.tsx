@@ -60,29 +60,17 @@ export default function StudentsPage() {
   const [highIntent, setHighIntent] = useState(false)
   const [needsEssayHelp, setNeedsEssayHelp] = useState(false)
 
-  // Fetch students from FastAPI backend
+  // Fetch students from FastAPI backend via shared API client
   const fetchStudents = async () => {
     try {
       setLoading(true)
-      
-      // Force fresh data with timestamp
-      const timestamp = Date.now()
-      const response = await fetch(`http://localhost:8000/api/students?t=${timestamp}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      })
-      
-      const data = await response.json()
-      if (data) {
-        setStudents(data)
+
+      const response = await apiClient.getStudents()
+      if (response.success && response.data) {
+        setStudents(response.data as Student[])
       } else {
-        console.error("Failed to fetch fresh students data")
+        console.error("Failed to fetch students:", response.error)
       }
-      
     } catch (error) {
       console.error("Error fetching students:", error)
     } finally {

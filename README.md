@@ -486,6 +486,3 @@ For support and questions:
 - Contact the development team
 - Check the troubleshooting section
 
----
-
-**Built with ❤️ for the undergraduation.com team**

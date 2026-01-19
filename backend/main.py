@@ -169,45 +169,15 @@ async def debug_firestore():
     except Exception as e:
         return {"error": str(e), "timestamp": datetime.now().isoformat()}
 
-@app.get("/api/students/")
+@app.get("/api/students", response_model=List[Student])
 async def get_students():
-    if not db:
-        return {"error": "Firestore not initialized", "students": []}
-    
+    """Get all students"""
     try:
-        print("🔍 Fetching students from Firestore...")
-        
-        # Use the service for better performance
         service = StudentV2Service(db)
         students = await service.get_students()
-        
-        # Convert to dict format for API response
-        students_data = []
-        for student in students:
-            student_dict = {
-                "id": student.id,
-                "name": student.name,
-                "email": student.email,
-                "country": student.country,
-                "phone": student.phone,
-                "grade": student.grade,
-                "source": student.source,
-                "status": student.status.value,
-                "last_active": student.last_active.isoformat() if student.last_active else None,
-                "last_contacted_at": student.last_contacted_at.isoformat() if student.last_contacted_at else None,
-                "high_intent": student.high_intent,
-                "needs_essay_help": student.needs_essay_help,
-                "created_at": student.created_at.isoformat() if student.created_at else None,
-                "additional_data": student.additional_data
-            }
-            students_data.append(student_dict)
-        
-        print(f"✅ Found {len(students_data)} students in Firestore")
-        return {"students": students_data}
-        
+        return students
     except Exception as e:
-        print(f"❌ Error fetching students: {e}")
-        return {"error": str(e), "students": []}
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/email/send", response_model=EmailSendResponse)
 async def send_email(email_request: EmailSendRequest):
@@ -336,17 +306,6 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 async def logout():
     """Logout user"""
     return {"message": "Successfully logged out"}
-
-# Student endpoints
-@app.get("/api/students", response_model=List[Student])
-async def get_students():
-    """Get all students"""
-    try:
-        service = StudentV2Service(db)
-        students = await service.get_students()
-        return students
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/students/{student_id}", response_model=Student)
 async def get_student(student_id: str):

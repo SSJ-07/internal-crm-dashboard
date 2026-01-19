@@ -124,7 +124,7 @@ class ApiClient {
     })
     
     const queryString = searchParams.toString()
-    const endpoint = queryString ? `/api/students/?${queryString}` : '/api/students/'
+    const endpoint = queryString ? `/api/students?${queryString}` : '/api/students'
     
     const response = await this.request<any>(endpoint, {
       method: 'GET',
@@ -134,11 +134,18 @@ class ApiClient {
       },
     })
     
-    // Handle the response format from our simple backend
-    if (response.success && response.data && response.data.students) {
+    // Handle both legacy `{ students: [...] }` and new `Student[]` response formats
+    if (response.success && Array.isArray(response.data)) {
       return {
         success: true,
-        data: response.data.students
+        data: response.data,
+      }
+    }
+
+    if (response.success && response.data && (response.data as any).students) {
+      return {
+        success: true,
+        data: (response.data as any).students,
       }
     }
     
@@ -152,7 +159,7 @@ class ApiClient {
   }
 
   async createStudent(studentData: any): Promise<ApiResponse<any>> {
-    return this.request<any>('/api/students/', {
+    return this.request<any>('/api/students', {
       method: 'POST',
       body: JSON.stringify(studentData),
     })
