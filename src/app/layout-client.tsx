@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { onAuthChange, logout, auth } from "@/lib/auth"
+import { onAuthChange, logout } from "@/lib/auth"
 import { useReminders } from "@/lib/reminders-context"
 
 // shadcn ui
@@ -28,16 +28,11 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   const router = useRouter()
   const { getUpcomingReminders, getOverdueReminders, updateReminder } = useReminders()
 
-  // Set up Firebase Auth listener
+  // Set up auth listener (now just sets a default admin user)
   useEffect(() => {
     const unsubscribe = onAuthChange((user) => {
       setUser(user)
       setLoading(false)
-      
-      if (!user) {
-        // User not authenticated, redirect to login
-        router.push('/login')
-      }
     })
 
     return unsubscribe

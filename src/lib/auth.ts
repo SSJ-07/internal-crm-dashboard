@@ -1,11 +1,12 @@
-import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged,
-  signOut as firebaseSignOut,
-  User as FirebaseUser
-} from 'firebase/auth'
-import { auth as firebaseAuth } from './firebase'
+// Temporary auth shim: disable Firebase Auth and treat all users as a fixed admin user.
+// import {
+//   signInWithPopup,
+//   GoogleAuthProvider,
+//   onAuthStateChanged,
+//   signOut as firebaseSignOut,
+//   User as FirebaseUser
+// } from 'firebase/auth'
+// import { auth as firebaseAuth } from './firebase'
 
 export interface User {
   id: string
@@ -16,52 +17,18 @@ export interface User {
 class AuthService {
   private currentUser: User | null = null
   private listeners: ((user: User | null) => void)[] = []
-  private authStateUnsubscribe: (() => void) | null = null
+  // private authStateUnsubscribe: (() => void) | null = null
 
   constructor() {
-    // Set up Firebase Auth state listener
-    this.setupAuthStateListener()
-  }
-
-  private setupAuthStateListener() {
-    // Only set up listener on client side
-    if (typeof window === 'undefined') return
-    
-    this.authStateUnsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        // User is signed in with Firebase
-        try {
-          // Get Firebase ID token
-          const idToken = await firebaseUser.getIdToken()
-          
-          // Store token for backend API calls
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('firebase_id_token', idToken)
-          }
-          
-          // Set user data
-          this.currentUser = {
-            id: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            name: firebaseUser.displayName || firebaseUser.email || 'User'
-          }
-          this.notifyListeners()
-          
-          console.log('✅ Firebase Auth successful:', this.currentUser.email)
-        } catch (error) {
-          console.error('❌ Error getting Firebase ID token:', error)
-          this.currentUser = null
-          this.notifyListeners()
-        }
-      } else {
-        // User is signed out
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('firebase_id_token')
-        }
-        this.currentUser = null
-        this.notifyListeners()
+    // Instead of real Firebase Auth, immediately set a default admin user.
+    if (typeof window !== 'undefined') {
+      this.currentUser = {
+        id: 'demo-admin',
+        email: 'crm@example.com',
+        name: 'CRM Admin',
       }
-    })
+      this.notifyListeners()
+    }
   }
 
   private notifyListeners() {
@@ -69,24 +36,18 @@ class AuthService {
   }
 
   async signInWithGoogle() {
-    try {
-      const provider = new GoogleAuthProvider()
-      const result = await signInWithPopup(firebaseAuth, provider)
-      return { user: result.user }
-    } catch (error) {
-      throw error
-    }
+    // No-op while Firebase Auth is disabled
+    return { user: this.currentUser }
   }
 
   async logout() {
-    try {
-      await firebaseSignOut(firebaseAuth)
-    } catch (error) {
-      console.error('Logout error:', error)
-    }
+    // No-op while Firebase Auth is disabled
   }
 
   onAuthChange(callback: (user: User | null) => void) {
+    // Immediately inform the subscriber of the current auth state
+    callback(this.currentUser)
+
     this.listeners.push(callback)
     
     // Return unsubscribe function
@@ -104,9 +65,7 @@ class AuthService {
 
   // Cleanup method
   destroy() {
-    if (this.authStateUnsubscribe) {
-      this.authStateUnsubscribe()
-    }
+    // No-op while Firebase Auth is disabled
   }
 }
 

@@ -28,8 +28,8 @@ interface UserProfile {
 
 export default function Settings() {
   const [profile, setProfile] = useState<UserProfile>({
-    name: "John Doe",
-    email: "john.doe@example.com",
+    name: "Sumedh Jadhav",
+    email: "sumedh.sa.jadhav@gmail.com",
     role: "admin",
     timezone: "UTC-8",
     notifications: {

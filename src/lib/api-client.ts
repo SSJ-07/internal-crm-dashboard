@@ -1,8 +1,16 @@
 /**
  * API Client for communicating with FastAPI backend
+ *
+ * NOTE:
+ * - Prefer setting NEXT_PUBLIC_API_BASE_URL in .env.local / Vercel.
+ * - Fallback to NEXT_PUBLIC_API_URL for backward compatibility.
+ * - Finally default to http://localhost:8000 for local development if nothing is set.
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000'
 
 interface ApiResponse<T> {
   data?: T
